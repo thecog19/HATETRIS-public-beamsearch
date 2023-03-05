@@ -7,7 +7,7 @@ This is the code used to obtain the current record of [302 points]()
 
 ## Setup
 
-This should work in any environment that has rust set up, but we have only tried it on linux based systems, so we can't promise that. 
+This should work in any environment that has rust set up, but we have only tried it on Linux based systems, so we can't promise that. 
 
 We assume familiarity with a command line system. 
 
@@ -25,7 +25,7 @@ cargo run --release
 This should install all dependencies and run the program. We output logs to stdout so you should pipe them somewhere if you want to review them. Something like 
 ```bash
 mkdir Output\ Logs/
-cargo run --release 2>&1 | tee Output\ Logs/NAME-OF-OUTPUT-LOG.txt
+cargo run --release 2>&1 | tee -a Output\ Logs/NAME-OF-OUTPUT-LOG.txt
 ```
 should suffice
 
