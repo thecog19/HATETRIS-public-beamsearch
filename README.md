@@ -40,7 +40,13 @@ If training, then in `Training/Aeon X/Generation Y/Training/`, files will be of 
 
 ## Training
 
-Training functions by taking a given well, and running a mini-beam search on it, exploring the potential of the well. It generates a few child wells, which are rated based on their performance as the beamsearch rolls out. Wells that end in defeat are rated poorly, ones that do not are rated better. We explore twice the training beam depth, if the game ends in the `0 <-> beam depth` move range, we rate it -1, if it ends in the `beam-depth <-> beam-depth*2` range, we scale it between the best result and -1 to account for how close it got to being the "best" well of that generation. We do this for wells gathered from the last generation of games. We'll link to the longer description here, when we write it. For now, read knewjades description and go look at the code!   
+Training functions by taking a given well, and running a mini-beam search on it, exploring the potential of the well. It generates a few child wells, which are rated based on their performance as the beamsearch rolls out. Wells that end in defeat are rated poorly, ones that do not are rated better. We explore twice the training beam depth, if the game ends in the `0 <-> beam depth` move range, we rate it -1, if it ends in the `beam-depth <-> beam-depth*2` range, we scale it between the best result and -1 to account for how close it got to being the "best" well of that generation. We do this for wells gathered from the last generation of games. We'll link to the longer description here, when we write it. For now, read knewjades description and go look at the code!
+
+## Loop Prevention
+
+HATETRIS includes [loop prevention rules](https://qntm.org/loops), but by default our emulator doesn't include those rules, since they involve (in the worst case) checking the entire history of the game up to that point.  We have a function in `emulator.rs`, `network_heuristic_loop()`, which would replace the standard `network_heuristic()` function and return not just the legal, loop-prevented, moves, but also return (if present) a game history showing the would-be loop.  If your training stalls out because the master beam has an unbounded score, then what probably happened is that you hit an infinite loop; if so, try out `network_heuristic_loop()`.  
+
+This function has not been tested at all, and even fewer guarantees are made about it than about the rest of the code.
 
 ## Metaparameters
 
