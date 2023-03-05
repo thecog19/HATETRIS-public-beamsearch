@@ -3,7 +3,7 @@ A publicly available implementation of knewjade's NNUE based search heuristic fo
 
 Based on knewjade's original work and description [here](https://gist.github.com/knewjade/24fd3a655e5321c8ebac8b93fa497ed9).
 
-This is the code used to obtain the current record of [302 points]().
+This is the code used to obtain the current record of [302 points](https://qntm.org/hatetris#komment6404c2c374fee).
 
 ## Setup
 
