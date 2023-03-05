@@ -30,7 +30,7 @@ cargo run --release 2>&1 | tee -a Output\ Logs/NAME-OF-OUTPUT-LOG.txt
 should suffice
 
 ## The Network
-By default we start with a fully untrained network. On our machine we saw a drastic improvement after one generation and took only about three weeks to reach 302 points. Check your logs to see how the network is performing. By default the data lives in the `training` folder. 
+By default we start with a fully untrained network. On our machine we saw a drastic improvement after one generation and took only about three weeks to reach 302 points. Check your logs to see how the network is performing. By default the data lives in the `Training` folder. 
 
 If the program crashes, you can just re-run it and as long as the training folder is populated, things will resume normally. You may want to check for a dangling file in these scenarios. 
 
