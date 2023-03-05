@@ -12,12 +12,6 @@ rand_distr = "0.4.1"
 fnv = "1.0.7"
 savefile = "0.8"
 savefile-derive = "0.8"
-simplers_optimization = "0.4.3"
-postgres = "0.19.4"
-
-[dependencies.pyo3]
-version = "0.17.2"
-features = ["auto-initialize"]
 
 [profile.release]
 debug = true
