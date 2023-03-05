@@ -36,11 +36,11 @@ If the program crashes, you can just re-run it and as long as the training folde
 
 In `Training/Aeon X/Generation Y/Replay/`, files will be of the type `parent_xxx.bin` and `move_xxx.bin`.  If either one is interrupted mid-write for a given timestep, you will have to delete both the move file and the parent file for that timestep in order for the beam search to resume properly.  The previous timesteps are not affected and will not need to be deleted.
 
-If training, then in Training/Aeon X/Generation Y/Training/, files will be of the type `epoch_xxx.bin`.  These can also fail mid-write; if so, you will need to delete the file from the most recent timestep.  The other epochs will not be affected.
+If training, then in `Training/Aeon X/Generation Y/Training/`, files will be of the type `epoch_xxx.bin`.  These can also fail mid-write; if so, you will need to delete the file from the most recent timestep.  The other epochs will not be affected.
 
 ## Training
 
-Training functions by taking a given well, and running a mini-beam search on it, exploring the potential of the well. It generates a few child wells, which are rated based on their performance as the beamsearch rolls out. Wells that end in defeat are rated poorly, ones that do not are rated better. We explore twice the training beam depth, if the game ends in the 0-beam depth move range, we rate it -1, if it ends in the beam-depth-beam-depth*2 range, we scale it between the best result and -1 to account for how close it got to being the "best" well of that generation. We do this for wells gathered from the last generation of games. We'll link to the longer description here, when we write it. For now, read knewjades description and go look at the code!   
+Training functions by taking a given well, and running a mini-beam search on it, exploring the potential of the well. It generates a few child wells, which are rated based on their performance as the beamsearch rolls out. Wells that end in defeat are rated poorly, ones that do not are rated better. We explore twice the training beam depth, if the game ends in the `0 <-> beam depth` move range, we rate it -1, if it ends in the `beam-depth <-> beam-depth*2` range, we scale it between the best result and -1 to account for how close it got to being the "best" well of that generation. We do this for wells gathered from the last generation of games. We'll link to the longer description here, when we write it. For now, read knewjades description and go look at the code!   
 
 ## Metaparameters
 
