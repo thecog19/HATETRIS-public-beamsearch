@@ -1,9 +1,9 @@
 # HATETRIS-public-beamsearch
 A publicly available implementation of knewjade's NNUE based search heuristic for [HATETRIS](https://qntm.org/hatetris). 
 
-Based on knewjades description [here](https://gist.github.com/knewjade/24fd3a655e5321c8ebac8b93fa497ed9)
+Based on knewjade's original work and description [here](https://gist.github.com/knewjade/24fd3a655e5321c8ebac8b93fa497ed9).
 
-This is the code used to obtain the current record of [302 points]()
+This is the code used to obtain the current record of [302 points]().
 
 ## Setup
 
