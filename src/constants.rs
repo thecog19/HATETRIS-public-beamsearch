@@ -63,7 +63,7 @@ pub const MASTER_BEAM_WIDTH: usize = 1_000_000;
 pub const TRAINING_BEAM_WIDTH: usize = 400;
 pub const TRAINING_BEAM_DEPTH: usize = 10;
 
-pub const AEON: usize = 3;
+pub const AEON: usize = 0;
 
 // FILE NAMING AND VERSIONING
 
