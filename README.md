@@ -5,6 +5,8 @@ Based on knewjade's original work and description [here](https://gist.github.com
 
 This is the code used to obtain the current record of [302 points](https://qntm.org/hatetris#komment6404c2c374fee).
 
+Additional words [here](https://hallofdreams.org/posts/hatetris-2/).
+
 ## Setup
 
 This should work in any environment that has rust set up, but we have only tried it on Linux based systems, so we can't promise that. 
