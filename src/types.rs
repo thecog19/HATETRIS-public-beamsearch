@@ -14,10 +14,10 @@ pub type WaveT = u64;
 pub type WellT = [RowT; EFF_HEIGHT];
 pub type ScoreT = u16;
 
-#[derive(Clone, Debug, Eq, Hash, PartialEq, Savefile)]
+#[derive(Clone, Debug, Eq, Hash, PartialEq, PartialOrd, Ord, Savefile)]
 pub struct State {
-	pub well: WellT,
 	pub score: ScoreT,
+	pub well: WellT,
 } 
 
 impl State {
@@ -27,30 +27,6 @@ impl State {
 
 	pub fn convert(state: StateH) -> State {
 		return State{well: state.well, score: state.score}
-	}
-}
-
-impl Ord for State {
-	fn cmp(&self, other: &Self) -> Ordering {
-		let first_cmp = self.score.cmp(&other.score);
-		if first_cmp != Ordering::Equal {
-			return first_cmp
-		}
-
-		let mut second_cmp = Ordering::Equal;
-		let mut i = 0;
-		while second_cmp == Ordering::Equal && i < EFF_HEIGHT {
-			second_cmp = self.well[i].cmp(&other.well[i]);
-			i += 1;
-		}
-
-		return second_cmp
-	}
-}
-
-impl PartialOrd for State {
-	fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
-		Some(self.cmp(other))
 	}
 }
 
