@@ -2,11 +2,11 @@
 
 use crate::constants::{AEON, ALL_CONV, CHECKPOINTS, EFF_HEIGHT, HIDDEN, TRAINING_BEAM_WIDTH, TRAINING_BEAM_DEPTH, MASTER_BEAM_WIDTH, MULTIPLIER};
 
-use std::{cmp::{Ordering}};
+use std::cmp::{Ordering};
 //use std::{arch::x86_64::__m256d, simd::f64x4};
 
 use savefile::prelude::Savefile;
-use rand::{thread_rng};
+use rand::thread_rng;
 use rand_distr::{Distribution, Normal};
 
 pub type RowT = u16;
@@ -54,57 +54,11 @@ impl PartialOrd for State {
 	}
 }
 
-#[derive(Clone, Debug, Hash)]
+#[derive(Clone, Debug, Hash, PartialEq, Eq, PartialOrd, Ord)]
 pub struct StateH {
-	pub well: WellT,
-	pub score: ScoreT,
-	pub heuristic: i64
-} 
-
-impl PartialEq for StateH {
-	fn eq(&self, other: &Self) -> bool {
-		if self.score != self.score {
-			return false
-		} else {
-			for i in 0..EFF_HEIGHT {
-				if self.well[i] != other.well[i] {
-					return false
-				}
-			}
-		}
-		return true
-	}
-}
-
-impl Eq for StateH {}
-
-impl Ord for StateH {
-	fn cmp(&self, other: &Self) -> Ordering {
-		let first_cmp = self.heuristic.cmp(&other.heuristic);
-		if first_cmp != Ordering::Equal {
-			return first_cmp
-		}
-
-		let second_cmp = self.score.cmp(&other.score);
-		if second_cmp != Ordering::Equal {
-			return second_cmp
-		}
-
-		let mut third_cmp = Ordering::Equal;
-		let mut i = 0;
-		while third_cmp == Ordering::Equal && i < EFF_HEIGHT {
-			third_cmp = self.well[i].cmp(&other.well[i]);
-			i += 1;
-		}
-
-		return third_cmp
-	}
-}
-
-impl PartialOrd for StateH {
-	fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
-		Some(self.cmp(other))
-	}
+    pub heuristic: i64,
+    pub score: ScoreT,
+    pub well: WellT,
 }
 
 impl StateH {
