@@ -18,3 +18,10 @@ features = ["derive"]
 
 [profile.release]
 debug = true
+lto = "fat"
+codegen-units = 1
+
+[target.x86_64-unknown-linux-gnu]
+rustflags = [
+        "-C", "target-cpu=native",
+]
