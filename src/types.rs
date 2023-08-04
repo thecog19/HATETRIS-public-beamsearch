@@ -5,7 +5,7 @@ use crate::constants::{AEON, ALL_CONV, CHECKPOINTS, EFF_HEIGHT, HIDDEN, TRAINING
 use std::{cmp::{Ordering}};
 //use std::{arch::x86_64::__m256d, simd::f64x4};
 
-use savefile_derive::Savefile;
+use savefile::prelude::Savefile;
 use rand::{thread_rng};
 use rand_distr::{Distribution, Normal};
 
