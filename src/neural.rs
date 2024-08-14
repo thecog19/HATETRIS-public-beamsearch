@@ -353,7 +353,7 @@ pub fn training_cycle() -> () {
 			weight = load_file(&neural_network_path, NET_VERSION).unwrap();
 			println!("Loading neural network from generation {}", generation);
 		} else {
-			panic!("No neural network found at generation {}!", generation);
+			panic!("No neural network found at generation {} at path {}!", generation, neural_network_path);
 		}
 	}
 

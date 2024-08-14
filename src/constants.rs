@@ -60,7 +60,7 @@ pub const MINIBATCH: usize = 4096;
 pub const MAX_EPOCHS: isize = 256;
 
 pub const MASTER_BEAM_WIDTH: usize = 1_000_000;
-pub const TRAINING_BEAM_WIDTH: usize = 400;
+pub const TRAINING_BEAM_WIDTH: usize = 512;
 pub const TRAINING_BEAM_DEPTH: usize = 10;
 
 pub const AEON: usize = 0;

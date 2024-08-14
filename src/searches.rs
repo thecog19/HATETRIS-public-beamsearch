@@ -121,56 +121,27 @@ pub fn thread_parent(
 	return t
 }
 
-pub fn beam_search_network(starting_state: &State, weight: &WeightT, conf: &SearchConf) -> f64  {
-	
-	let beam_width = conf.beam_width;
-	let beam_depth = conf.beam_depth;
-	
+fn init_from_save(conf: &SearchConf, wells: &mut Vec<State>, parents: &mut Vec<StateP>, starting_state: &State, starting_parent: StateP, depth: &mut usize) {
 	if conf.save {
-		fs::create_dir_all(conf.replay_path())
-		.expect("Could not create replay folder.");
-	}
-
-	let mut wells: Vec<State> = Vec::with_capacity(beam_width + 1);
-	let mut depth = 0;
-	let mut parents: Vec<StateP> = 
-		if conf.parent {
-			Vec::with_capacity(3*beam_width)
-		} else {
-			Vec::with_capacity(1)
-		};
-
-	let starting_parent = StateP { 
-		well: starting_state.well.clone(), 
-		score: starting_state.score,
-		heuristic: network_heuristic_individual(&starting_state, &weight, conf),
-		min_prev_heuristic: f64::MAX,
-		depth: 0,
-		parent_index: usize::MAX // This would cause a panic were it ever accessed.
-	};
-
-	if conf.save {
-		let mut file_name = conf.move_path(depth);
+		let mut file_name = conf.move_path(*depth);
 		if !Path::new(&file_name).exists() {
-			wells.push( starting_state.clone());
+			wells.push(starting_state.clone());
 			if conf.parent {
 				parents.push(starting_parent);
 			}
-			save_file(&file_name, VERSION, &wells).unwrap();
+			save_file(&file_name, VERSION, wells).unwrap();
 		} else {
 			while Path::new(&file_name).exists() {
-				depth += 1;
-				file_name = conf.move_path(depth);
+				*depth += 1;
+				file_name = conf.move_path(*depth);
 			}
-
-			depth -= 1;
-			file_name = conf.move_path(depth);
-			wells = load_file(&file_name, VERSION).unwrap();
-			println!("Loaded {} positions from depth {}",wells.len(), depth);
-
+			*depth -= 1;
+			file_name = conf.move_path(*depth);
+			*wells = load_file(&file_name, VERSION).unwrap();
+			println!("Loaded {} positions from depth {}", wells.len(), depth);
 			if conf.parent {
-				let parent_file_name = conf.parent_path(depth);
-				parents = load_file(&parent_file_name, VERSION).unwrap();
+				let parent_file_name = conf.parent_path(*depth);
+				*parents = load_file(&parent_file_name, VERSION).unwrap();
 				println!("Loaded {} parents from depth {}", parents.len(), depth);
 			}
 		}
@@ -180,9 +151,85 @@ pub fn beam_search_network(starting_state: &State, weight: &WeightT, conf: &Sear
 			parents.push(starting_parent);
 		}
 	}
+}
+
+fn print_progress(conf: &SearchConf, wells: &Vec<State>, depth: usize, children_count: usize, start: &Instant, weight: &WeightT) {
+    let mut families: Vec<usize> = vec![0; MAX_ROW as usize + 1];
+    let mut scores = vec![0; wells[0].score as usize + 1];
+    let mut best_by_score = wells[0].clone();
+    
+    for w in wells.iter() {
+        families[w.well[(EFF_HEIGHT-1) as usize] as usize] += 1;
+        if w.score >= best_by_score.score {
+            best_by_score = w.clone();
+            while scores.len() <= w.score as usize {
+                scores.push(0);
+            }
+        }
+        scores[w.score as usize] += 1;
+    }
+    families.sort();
+    families.reverse();
+
+    let score_best_h = StateH {
+        well: best_by_score.well.clone(),
+        score: best_by_score.score.clone(),
+        heuristic: (network_heuristic_individual(&best_by_score, weight, conf) * 1_000_000.0) as i64
+    };
+
+    let worst = wells[0].clone();
+    let worst_h = StateH {
+        well: worst.well.clone(),
+        score: worst.score.clone(),
+        heuristic: (network_heuristic_individual(&worst, weight, conf) * 1_000_000.0) as i64
+    };
+
+    let best = wells[wells.len() - 1].clone();
+    let best_h = StateH {
+        well: best.well.clone(),
+        score: best.score.clone(),
+        heuristic: (network_heuristic_individual(&best, weight, conf) * 1_000_000.0) as i64
+    };
+
+    println!("");
+    println!("Depth {}", depth);
+    println!("Time: {} seconds", start.elapsed().as_secs());
+    println!("Total children: {}", children_count);
+    println!("New well count: {}", wells.len());
+    println!("Maximum score: {:?}", score_best_h);
+    println!("Worst heuristic: {:?}", worst_h);
+    println!("Best heuristic: {:?}", best_h);
+    println!("Family distribution: {:?}", &families[0..10]);
+    println!("Score distribution: {:?}", scores);
+}
+
+pub fn beam_search_network(starting_state: &State, weight: &WeightT, conf: &SearchConf) -> f64  {
+	let beam_width = conf.beam_width;
+	let beam_depth = conf.beam_depth;
+	if conf.save {
+		fs::create_dir_all(conf.replay_path()).expect("Could not create replay folder.");
+	}
+
+	let mut wells = Vec::with_capacity(beam_width + 1);
+	let mut depth: usize = 0;
+	let mut parents = if conf.parent {
+		Vec::with_capacity(3 * beam_width)
+	} else {
+		Vec::with_capacity(1)
+	};
+
+	let starting_parent = StateP {
+		well: starting_state.well.clone(),
+		score: starting_state.score,
+		heuristic: network_heuristic_individual(starting_state, weight, conf),
+		min_prev_heuristic: f64::MAX,
+		depth: 0,
+		parent_index: usize::MAX, // This would cause a panic were it ever accessed.
+	};
+
+	init_from_save(conf, &mut wells, &mut parents, starting_state, starting_parent, &mut depth);
 	
 	let start = Instant::now();
-	let mut max_score = 0;
 	let mut return_heuristic: f64 = -1.0;
 	let mut final_depth = 0;
 
@@ -275,7 +322,6 @@ pub fn beam_search_network(starting_state: &State, weight: &WeightT, conf: &Sear
 			}
 		} else {
 			for well in wells.iter() {
-				
 				let full_legal = network_heuristic(well, weight, conf);
 				children_count += full_legal.len();
 
@@ -366,67 +412,23 @@ pub fn beam_search_network(starting_state: &State, weight: &WeightT, conf: &Sear
 		}
 
 		if conf.print {
-			let mut families: Vec<usize> = vec![0; MAX_ROW as usize + 1];
-			let mut scores = vec![0; wells[0].score as usize + 1];
-			let mut best_by_score = wells[0].clone();
-			for w in wells.iter() {
-				families[w.well[(EFF_HEIGHT-1) as usize] as usize] += 1;
-				if w.score >= best_by_score.score {
-					best_by_score = w.clone();
-					while scores.len() <= w.score as usize {
-						scores.push(0);
-					}
-				}
-				scores[w.score as usize] += 1;
-			}
-			families.sort();
-			families.reverse();
-
-			if scores.len()-1 > max_score {max_score = scores.len()-1};
-
-			let score_best_h = StateH {
-				well: best_by_score.well.clone(),
-				score: best_by_score.score.clone(),
-				heuristic: (network_heuristic_individual(&best_by_score, weight, conf) * 1_000_000.0) as i64
-			};
-
-			let worst = wells[0].clone();
-			let worst_h = StateH {
-				well: worst.well.clone(),
-				score: worst.score.clone(),
-				heuristic: (network_heuristic_individual(&worst, weight, conf) * 1_000_000.0) as i64
-			};
-
-			let best = wells[wells.len()-1].clone();
-			let best_h = StateH {
-				well: best.well.clone(),
-				score: best.score.clone(),
-				heuristic: (network_heuristic_individual(&best, weight, conf) * 1_000_000.0) as i64
-			};
-			
-			let end = start.elapsed().as_secs();
-	
-			println!("");
-			println!("Depth {}", depth);
-			println!("Time: {} seconds", end);
-			if conf.parent {
-				println!("Total parents: {}", parents.len());
-			}
-			println!("Total children: {}", children_count);
-			println!("New well count: {}",wells.len());
-			println!("Maximum score: {:?}", score_best_h);
-			println!("Worst heuristic: {:?}", worst_h);
-			println!("Best heuristic: {:?}", best_h);
-			println!("Family distribution: {:?}", &families[0..10]);
-			println!("Score distribution: {:?}", scores);
+			print_progress(conf, &wells, depth, children_count, &start, weight);
 		}
 	}
 
 	if conf.print && conf.parent {
+		println!("");
 		let keyframes = get_keyframes_from_parents(&parents);
 		for k in keyframes {
 			println!("{:?}", k);
 		}
+	}
+
+	if conf.print {
+		let max_score = parents.iter().map(|s| s.score).max().unwrap();
+
+		println!("");
+		println!("SUMMARY: Width: {}; Score: {}; Depth: {}", conf.beam_width, max_score, final_depth);
 	}
 
 	if final_depth <= beam_depth || beam_depth == 0 {
