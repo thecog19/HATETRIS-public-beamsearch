@@ -1,6 +1,6 @@
-use crate::constants::{VERSION};
-use crate::types::{State};
-use crate::types::{SearchConf};
+use crate::constants::VERSION;
+use crate::types::State;
+use crate::types::SearchConf;
 
 use std::path::Path;
 use std::fs;

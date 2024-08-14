@@ -1,5 +1,5 @@
 use crate::constants::{AEON, ALL_CONV, ALPHA, CONV_COUNT, CONVOLUTIONS, EFF_HEIGHT, EPS, HIDDEN, RHO, RHO_F, WIDTH, MINIBATCH, MAX_EPOCHS, THREAD_NUMBER, VERSION, NET_VERSION};
-use crate::database::{extract_data_points};
+use crate::database::extract_data_points;
 use crate::searches::beam_search_network;
 use crate::types::{State, RowT, WeightT, WellT, SearchConf};
 
@@ -10,7 +10,7 @@ use std::thread::JoinHandle;
 
 use std::fs;
 use std::path::Path;
-use std::time::{Instant};
+use std::time::Instant;
 
 use savefile::prelude::*;
 
@@ -80,69 +80,15 @@ pub fn forward_pass(
 	return output
 }
 
-// Takes convolution list and weights, and returns total loss.
-// This does not keep or return internal neuron values.
-
-// pub unsafe fn forward_pass_chunk(
-// 	conv_list: [usize; CONV_COUNT], 
-// 	weight: &WeightChunkT
-// ) -> f64 {
-
-// 	let mut output = 0.0;
-// 	let mut hidden = vec![];
-// 	for _ in (0..HIDDEN).step_by(CHUNK) {
-// 		hidden.push(__m256d::from(f64x4::from_array([0.0; CHUNK])));
-// 	}
-
-// 	for c in conv_list {
-// 		for h in 0..hidden.len() {
-// 			let tmp = _mm256_add_pd(hidden[h], weight.conv[c][h]);
-// 			hidden[h] = tmp;
-// 		}
-// 	}
-
-// 	let mut unpacked_hidden = Vec::with_capacity(HIDDEN);
-// 	for h in 0..hidden.len() {
-// 		let unpack = f64x4::from(hidden[h]).as_array().clone();
-// 		for u in unpack {
-// 			unpacked_hidden.push(u);
-// 		}
-// 	}
-
-// 	let mut unpacked_weight = Vec::with_capacity(HIDDEN);
-// 	for h in 0..weight.hidden.len() {
-// 		let unpack = f64x4::from(weight.hidden[h]).as_array().clone();
-// 		for u in unpack {
-// 			unpacked_weight.push(u);
-// 		}
-// 	}
-
-// 	for h in 0..HIDDEN {
-// 		unpacked_hidden[h] = unpacked_hidden[h].tanh();
-// 		output += unpacked_hidden[h] * unpacked_weight[h];
-// 	}
-// 	output = output.tanh();
-
-// return output
-// }
-
-// Takes convolution list and weights, and returns a tuple (inputs, hidden, loss).
-// Used for training and backpropagation.
-
 pub fn forward_pass_memory(
 		conv_list: [usize; CONV_COUNT], 
 		weight: &WeightT
 	) -> ([f64; HIDDEN], f64) {
 
-	//let mut inputs = [0.0; ALL_CONV];
 	let mut pre_hidden = [0.0; HIDDEN];
 	let mut hidden = [0.0; HIDDEN];
 	let mut pre_output = 0.0;
 	let output: f64;
-
-	// for c in conv_list {
-	// 	inputs[c] += 1.0;
-	// }
 
 	for c in conv_list {
 		for h in 0..HIDDEN {

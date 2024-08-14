@@ -8,7 +8,7 @@ use std::path::Path;
 use std::sync::{Arc, Mutex};
 use std::thread;
 use std::thread::JoinHandle;
-use std::time::{Instant};
+use std::time::Instant;
 
 use fnv::{FnvHashMap, FnvHashSet};
 
@@ -186,7 +186,7 @@ pub fn beam_search_network(starting_state: &State, weight: &WeightT, conf: &Sear
 	let mut return_heuristic: f64 = -1.0;
 	let mut final_depth = 0;
 
-	while wells.len() > 0 && depth < beam_depth.saturating_mul(2) {
+	while wells.len() > 0 && depth < beam_depth {
 		depth += 1;
 		let mut new_wells: BTreeSet<StateH> = BTreeSet::new();
 		let mut first_entry: StateH = StateH::new();
@@ -429,18 +429,9 @@ pub fn beam_search_network(starting_state: &State, weight: &WeightT, conf: &Sear
 		}
 	}
 
-	// The scaling factor adjusts the goal heuristic by the depth of the beam, for a much smoother transition.
-	// If final_depth < beam_depth, return -1.
-	// If final_depth > beam_depth * 2, return return_heuristic.
-	// Else, return the linear interpolation between return_heuristic and -1.
-
 	if final_depth <= beam_depth || beam_depth == 0 {
 		return -1.0
-	} else if final_depth > beam_depth.saturating_mul(2) {
-		return return_heuristic
 	} else {
-		let f = final_depth as f64;
-		let b = beam_depth as f64;
-		return ((f-b) * return_heuristic + (2.0*b - f) * -1.0) / b
+		return return_heuristic
 	}
 }

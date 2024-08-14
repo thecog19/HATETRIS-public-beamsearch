@@ -11,8 +11,8 @@ pub mod types;
 
 use crate::constants::{ALL_CONV, EFF_HEIGHT, HIDDEN, WIDTH, WEIGHT_COUNT};
 use crate::masks::{EMPTY_MASKS, ROW_MASKS, HEIGHT_MASKS, SCORE_MASKS, SURFACE_LINE_ARRAY};
-use crate::neural::{training_cycle};
-use crate::pieces::{PIECE_LIST};
+use crate::neural::training_cycle;
+use crate::pieces::PIECE_LIST;
 
 extern crate savefile;
 

@@ -142,12 +142,6 @@ pub struct WeightDiscreteT {
 	pub hidden: [i16; HIDDEN]
 }
 
-// #[derive(Clone, Debug)]
-// pub struct WeightChunkT {
-// 	pub conv: Vec<Vec<__m256d>>,
-// 	pub hidden: Vec<__m256d>
-// }
-
 impl WeightDiscreteT {
 	pub fn zero() -> WeightDiscreteT {
 		return WeightDiscreteT {
@@ -209,23 +203,6 @@ impl WeightT {
 		};
 		return new_weights
 	}
-
-	// pub fn to_chunks(&self) -> WeightChunkT {
-	// 	let mut conv = vec![];
-	// 	for i in 0..self.conv.len() {
-	// 		conv.push(vec![]);
-	// 		for j in (0..self.conv[i].len()).step_by(CHUNK) {
-	// 			conv[i].push(__m256d::from(f64x4::from_slice(&self.conv[i][j..j+CHUNK])));
-	// 		}
-	// 	}
-
-	// 	let mut hidden = vec![];
-	// 	for j in (0..self.hidden.len()).step_by(CHUNK) {
-	// 		hidden.push(__m256d::from(f64x4::from_slice(&self.hidden[j..j+CHUNK])));
-	// 	}
-
-	// 	return WeightChunkT { conv: conv, hidden: hidden }
-	// }
 }
 
 #[derive(Clone, Debug)]

@@ -3,7 +3,7 @@
 use lazy_static::lazy_static;
 
 use crate::constants::{WAVE_SIZE, WIDTH};
-use crate::types::{RowT};
+use crate::types::RowT;
 
 pub const PIECE_COUNT: usize = 7;
 
