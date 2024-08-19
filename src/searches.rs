@@ -1,13 +1,10 @@
-use crate::constants::{EFF_HEIGHT, MAX_ROW, THREAD_BATCH, THREAD_NUMBER, VERSION, MULTIPLIER};
+use crate::constants::{EFF_HEIGHT, MAX_ROW, VERSION, MULTIPLIER};
 use crate::emulator::{single_move, network_heuristic_individual, network_heuristic};
 use crate::types::{SearchConf, State, StateH, WeightT, StateP};
 
 use std::collections::{BTreeSet, HashSet};
 use std::fs;
 use std::path::Path;
-use std::sync::{Arc, Mutex};
-use std::thread;
-use std::thread::JoinHandle;
 use std::time::Instant;
 
 use fnv::{FnvHashMap, FnvHashSet};
@@ -21,6 +18,8 @@ pub fn complete_search(starting_state: &State) -> () {
 	move_list.insert(starting_state.clone());
 
 	let mut depth = 0;
+	let mut max_score = starting_state.score;
+	let mut max_width = 1;
 
 	while move_list.len() > 0 {
 		let mut new_list = HashSet::new();
@@ -53,6 +52,8 @@ pub fn complete_search(starting_state: &State) -> () {
 		families.reverse();
 
 		depth += 1;
+		max_score = max_score.max(best_by_score.score);
+		max_width = max_width.max(move_list.len());
 		
 		println!("");
 		println!("Depth {}", depth);
@@ -63,6 +64,9 @@ pub fn complete_search(starting_state: &State) -> () {
 		println!("Family distribution: {:?}", &families[0..10]);
 		println!("Score distribution: {:?}", scores);
 	}
+
+	println!("");
+	println!("COMPLETE SEARCH SUMMARY: Width: {}; Score: {}; Depth: {}", max_width, max_score, depth);
 }
 
 pub fn get_keyframes_from_parents(parent_array: &Vec<StateP>) -> Vec<StateH> {
@@ -78,47 +82,33 @@ pub fn get_keyframes_from_parents(parent_array: &Vec<StateP>) -> Vec<StateH> {
 	return keyframes
 }
 
-pub fn thread_parent(
-	parents: Vec<(usize, StateP)>, 
-	weight: WeightT, 
-	conf: SearchConf,
-	arc_is_running: Arc<Mutex<Vec<bool>>>,
-	index: usize
-	) -> JoinHandle<(Vec<(StateH, StateP)>)> {
+pub fn insert_state(node: &State, h: f64, new_wells: &mut BTreeSet<StateH>, conf: &SearchConf) -> bool {
+	let weighted_h = (h * MULTIPLIER) as i64;
 
-	let t = thread::spawn(move || {
-		let mut to_return = vec![];
-		
-		for (p, parent) in parents {
-			let well = &parent.convert_state();
-			let full_legal = network_heuristic(well, &weight, &conf);
-				
-			for (node, h) in full_legal {
-				let weighted_h = (h * MULTIPLIER) as i64;
+	let to_insert = StateH {
+						well: node.well, 
+						score: node.score, 
+						heuristic: weighted_h};
 
-				let to_insert = StateH {
-									well: node.well, 
-									score: node.score, 
-									heuristic: weighted_h};
+	let length = new_wells.len();
+	let first_entry_heuristic = 
+		if length == 0 {
+			i64::MIN
+		} else {
+			new_wells.iter().next().unwrap().heuristic
+		};
 
-				let new_parent = StateP { 
-					well: to_insert.well.clone(), 
-					score: to_insert.score,
-					heuristic: h,
-					min_prev_heuristic: h.min(parent.min_prev_heuristic),
-					depth: parent.depth + 1,
-					parent_index: p
-				};
-				to_return.push((to_insert, new_parent));
-			};
+	if ((length == conf.beam_width && to_insert.heuristic > first_entry_heuristic) || length < conf.beam_width) && !new_wells.contains(&to_insert) {
+		new_wells.insert(to_insert.clone());
+
+		if length == conf.beam_width {
+			let first_entry = new_wells.iter().next().unwrap().clone();
+			new_wells.remove(&first_entry);
 		}
-		let mut is_running = arc_is_running.lock().unwrap();
-		is_running[index] = false;
-		drop(is_running);
-
-		return to_return;
-	});
-	return t
+		return true
+	} else {
+		return false
+	}
 }
 
 fn init_from_save(conf: &SearchConf, wells: &mut Vec<State>, parents: &mut Vec<StateP>, starting_state: &State, starting_parent: StateP, depth: &mut usize) {
@@ -230,136 +220,59 @@ pub fn beam_search_network(starting_state: &State, weight: &WeightT, conf: &Sear
 	init_from_save(conf, &mut wells, &mut parents, starting_state, starting_parent, &mut depth);
 	
 	let start = Instant::now();
-	let mut return_heuristic: f64 = -1.0;
-	let mut final_depth = 0;
 
 	while wells.len() > 0 && depth < beam_depth {
 		depth += 1;
 		let mut new_wells: BTreeSet<StateH> = BTreeSet::new();
-		let mut first_entry: StateH = StateH::new();
 
 		let mut new_parents: Vec<StateP> = parents.clone();
 
 		let mut children_count = 0;
-		let mut length = 0;
-		let mut best_heuristic = -1.0;
 
-		if conf.parent {
-			let mut parent_array = vec![vec![]; 1];
+		if conf.parent {		
 			for (p, parent) in parents.iter().enumerate() {
-				if parent.depth != depth - 1 {
+				if parent.depth != depth - 1{
 					continue
-				} else {
-					let len = parent_array.len();
-					if parent_array[len-1].len() == THREAD_BATCH {
-						parent_array.push(vec![(p, parent.clone())]);
-					} else {
-						parent_array[len-1].push((p, parent.clone()));
+				}
+
+				let well = &parent.convert_state();
+				let full_legal = network_heuristic(well, &weight, &conf);
+				children_count += full_legal.len();
+					
+				for (node, h) in full_legal {
+					let new_parent = StateP { 
+						well: node.well.clone(), 
+						score: node.score,
+						heuristic: h,
+						min_prev_heuristic: h.min(parent.min_prev_heuristic),
+						depth: parent.depth + 1,
+						parent_index: p
+					};
+
+					let did_insert = insert_state(&node, h, &mut new_wells, &conf);
+					if did_insert {
+						new_parents.push(new_parent);
 					}
-				}
-			};
-
-			let arc_is_running = Arc::new(Mutex::new(vec![false; THREAD_NUMBER]));
-			let mut thread_list: Vec<JoinHandle<Vec<(StateH, StateP)>>> = vec![];
-			let mut interval = 0;
-			while interval < parent_array.len() || thread_list.len() > 0 {
-				let is_running = arc_is_running.lock().unwrap();
-				let mut to_merge = None;
-				for t in 0..THREAD_NUMBER {
-					if t == thread_list.len() || !is_running[t] {
-						to_merge = Some(t);
-						break;
-					}
-				}
-				drop(is_running);
-
-				if to_merge.is_some() && thread_list.len() > to_merge.unwrap() {
-					let thread_result = thread_list.remove(to_merge.unwrap()).join().unwrap();
-
-					children_count += thread_result.len();
-					for (state, parent) in thread_result {
-						if length == 1 {
-							first_entry = new_wells.iter().next().unwrap().clone();
-						};
-
-						if ((length == beam_width && state.heuristic > first_entry.heuristic) || length < beam_width) && 
-						!new_wells.contains(&state) {
-							let tmp_heuristic = state.heuristic as f64 / (MULTIPLIER as f64);
-							if tmp_heuristic > best_heuristic {
-								best_heuristic = tmp_heuristic;
-							};
-
-							new_wells.insert(state);
-							new_parents.push(parent);
-
-							if length == beam_width {
-								new_wells.remove(&first_entry);
-								first_entry = new_wells.iter().next().unwrap().clone();
-							} else {
-								length += 1;
-							}
-						}
-					}
-				}
-
-				if to_merge.is_some() && interval < parent_array.len() {
-					let index = to_merge.unwrap();
-					let cloned_arc_is_running = arc_is_running.clone();
-					thread_list.insert(index,
-						thread_parent(
-							parent_array[interval].clone(), 
-							weight.clone(), 
-							conf.clone(), 
-							cloned_arc_is_running, 
-							index
-						));
-						interval += 1;
-						
-						let mut is_running = arc_is_running.lock().unwrap();
-						is_running[index] = true;
-						drop(is_running);
-				}
+				};
 			}
+			
 		} else {
 			for well in wells.iter() {
 				let full_legal = network_heuristic(well, weight, conf);
 				children_count += full_legal.len();
 
 				for (node, h) in full_legal {
-					best_heuristic = best_heuristic.max(h);
-
-					let weighted_h = (h * MULTIPLIER) as i64;
-
-					let to_insert = StateH {
-										well: node.well, 
-										score: node.score, 
-										heuristic: weighted_h};
-
-					children_count += 1;
-
-					if length == 1 {
-						first_entry = new_wells.iter().next().unwrap().clone();
-					};
-
-					if ((length == beam_width && to_insert.heuristic > first_entry.heuristic) || 
-					length < beam_width) && 
-					!new_wells.contains(&to_insert) {
-
-						new_wells.insert(to_insert.clone());
-						length += 1;
-
-						if length >= beam_width {
-							new_wells.remove(&first_entry);
-							length -= 1;
-							first_entry = new_wells.iter().next().unwrap().clone();
-						}
-					}
+					insert_state(&node, h, &mut new_wells, &conf);
 				}
 			}
 		}
 
-		if conf.parent && new_wells.len() > 0 {
-			let mut index_hash_set = FnvHashSet::with_capacity_and_hasher(2 * length, Default::default());
+		if new_wells.len() == 0 {
+			break;
+		}
+
+		if conf.parent {
+			let mut index_hash_set = FnvHashSet::with_capacity_and_hasher(2 * new_wells.len(), Default::default());
 			for i in 0..new_parents.len() {
 				if new_parents[i].depth == depth && new_wells.contains(&new_parents[i].convert_state_h()) {
 					let mut j = i;
@@ -392,15 +305,6 @@ pub fn beam_search_network(starting_state: &State, weight: &WeightT, conf: &Sear
 			wells.push(State::convert(w));
 		}
 
-		if wells.len() == 0 {
-			break;
-		} else {
-			final_depth = depth;
-			if depth == beam_depth {
-				return_heuristic = best_heuristic;
-			}
-		}
-
 		if conf.save {
 			let file_name = conf.move_path(depth);
 			save_file(&file_name, VERSION, &wells).unwrap();
@@ -428,12 +332,22 @@ pub fn beam_search_network(starting_state: &State, weight: &WeightT, conf: &Sear
 		let max_score = parents.iter().map(|s| s.score).max().unwrap();
 
 		println!("");
-		println!("SUMMARY: Width: {}; Score: {}; Depth: {}", conf.beam_width, max_score, final_depth);
+		println!("GENERATION {} SUMMARY: Width: {}; Score: {}; Depth: {}", conf.generation, conf.beam_width, max_score, depth);
 	}
 
-	if final_depth <= beam_depth || beam_depth == 0 {
+	if depth <= beam_depth || beam_depth == 0 {
 		return -1.0
 	} else {
-		return return_heuristic
+		let mut best_heuristic = -1.0;
+		for p in parents {
+			if p.depth != depth {
+				continue
+			} else if p.heuristic > best_heuristic {
+				// Annoying that this isn't a simple one-liner.
+				best_heuristic = p.heuristic
+			}
+		}
+
+		return best_heuristic
 	}
 }

@@ -2,7 +2,7 @@
 
 use crate::constants::{AEON, ALL_CONV, CHECKPOINTS, EFF_HEIGHT, HIDDEN, TRAINING_BEAM_WIDTH, TRAINING_BEAM_DEPTH, MASTER_BEAM_WIDTH, MULTIPLIER};
 
-use std::cmp::{Ordering};
+use std::cmp::Ordering;
 //use std::{arch::x86_64::__m256d, simd::f64x4};
 
 use savefile::prelude::Savefile;
