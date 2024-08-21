@@ -2,7 +2,7 @@ use lazy_static::lazy_static;
 
 use crate::constants::{MAX_ROW, WAVE_SIZE};
 use crate::pieces::{PIECE_COUNT, PIECE_LIST};
-use crate::types::{WaveT};
+use crate::types::WaveT;
 
 // Masks
 // All masks have as many significant bits as waveforms do.

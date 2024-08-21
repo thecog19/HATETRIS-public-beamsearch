@@ -111,6 +111,35 @@ pub fn insert_state(node: &State, h: f64, new_wells: &mut BTreeSet<StateH>, conf
 	}
 }
 
+pub fn insert_new_parents(depth: usize, new_wells: &BTreeSet<StateH>, new_parents: Vec<StateP>, parents: &mut Vec<StateP>) -> () {
+	let mut index_hash_set = FnvHashSet::with_capacity_and_hasher(2 * new_wells.len(), Default::default());
+	for i in 0..new_parents.len() {
+		if new_parents[i].depth == depth && new_wells.contains(&new_parents[i].convert_state_h()) {
+			let mut j = i;
+			let mut d = depth;
+			while d > 0 {
+				d = new_parents[j].depth;
+				index_hash_set.insert(j);
+				j = new_parents[j].parent_index;
+			}
+		}
+	}
+	let mut indices: Vec<usize> = index_hash_set.drain().collect();
+	indices.sort();
+
+	let mut index_hash_map = FnvHashMap::with_capacity_and_hasher(indices.len(), Default::default());
+	index_hash_map.insert(usize::MAX, usize::MAX);
+
+	parents.clear();
+	for (new_i, old_i) in indices.iter().enumerate() {
+		let mut new_parent = new_parents[*old_i].clone();
+		new_parent.parent_index = *index_hash_map.get(&new_parent.parent_index).unwrap();
+		parents.push(new_parent);
+		index_hash_map.insert(*old_i, new_i);
+	}
+	parents.dedup();
+}
+
 fn init_from_save(conf: &SearchConf, wells: &mut Vec<State>, parents: &mut Vec<StateP>, starting_state: &State, starting_parent: StateP, depth: &mut usize) {
 	if conf.save {
 		let mut file_name = conf.move_path(*depth);
@@ -218,16 +247,17 @@ pub fn beam_search_network(starting_state: &State, weight: &WeightT, conf: &Sear
 	};
 
 	init_from_save(conf, &mut wells, &mut parents, starting_state, starting_parent, &mut depth);
+
+	let mut best_heuristic = -1.0;
 	
 	let start = Instant::now();
 
 	while wells.len() > 0 && depth < beam_depth {
 		depth += 1;
+		let mut children_count: usize = 0;
+		
 		let mut new_wells: BTreeSet<StateH> = BTreeSet::new();
-
 		let mut new_parents: Vec<StateP> = parents.clone();
-
-		let mut children_count = 0;
 
 		if conf.parent {		
 			for (p, parent) in parents.iter().enumerate() {
@@ -240,17 +270,17 @@ pub fn beam_search_network(starting_state: &State, weight: &WeightT, conf: &Sear
 				children_count += full_legal.len();
 					
 				for (node, h) in full_legal {
-					let new_parent = StateP { 
-						well: node.well.clone(), 
-						score: node.score,
-						heuristic: h,
-						min_prev_heuristic: h.min(parent.min_prev_heuristic),
-						depth: parent.depth + 1,
-						parent_index: p
-					};
-
 					let did_insert = insert_state(&node, h, &mut new_wells, &conf);
 					if did_insert {
+						let new_parent = StateP { 
+							well: node.well.clone(), 
+							score: node.score,
+							heuristic: h,
+							min_prev_heuristic: h.min(parent.min_prev_heuristic),
+							depth: parent.depth + 1,
+							parent_index: p
+						};
+
 						new_parents.push(new_parent);
 					}
 				};
@@ -272,36 +302,16 @@ pub fn beam_search_network(starting_state: &State, weight: &WeightT, conf: &Sear
 		}
 
 		if conf.parent {
-			let mut index_hash_set = FnvHashSet::with_capacity_and_hasher(2 * new_wells.len(), Default::default());
-			for i in 0..new_parents.len() {
-				if new_parents[i].depth == depth && new_wells.contains(&new_parents[i].convert_state_h()) {
-					let mut j = i;
-					let mut d = depth;
-					while d > 0 {
-						d = new_parents[j].depth;
-						index_hash_set.insert(j);
-						j = new_parents[j].parent_index;
-					}
-				}
-			}
-			let mut indices: Vec<usize> = index_hash_set.drain().collect();
-			indices.sort();
-
-			let mut index_hash_map = FnvHashMap::with_capacity_and_hasher(indices.len(), Default::default());
-			index_hash_map.insert(usize::MAX, usize::MAX);
-
-			parents.clear();
-			for (new_i, old_i) in indices.iter().enumerate() {
-				let mut new_parent = new_parents[*old_i].clone();
-				new_parent.parent_index = *index_hash_map.get(&new_parent.parent_index).unwrap();
-				parents.push(new_parent);
-				index_hash_map.insert(*old_i, new_i);
-			}
-			parents.dedup();
+			insert_new_parents(depth, &new_wells, new_parents, &mut parents);
 		}
 
 		wells.clear();
+		best_heuristic = -1.0;
+
 		for w in new_wells {
+			if (w.heuristic as f64) / 1_000_000.0 > best_heuristic {
+				best_heuristic = (w.heuristic as f64) / 1_000_000.0;
+			}
 			wells.push(State::convert(w));
 		}
 
@@ -320,15 +330,15 @@ pub fn beam_search_network(starting_state: &State, weight: &WeightT, conf: &Sear
 		}
 	}
 
-	if conf.print && conf.parent {
-		println!("");
-		let keyframes = get_keyframes_from_parents(&parents);
-		for k in keyframes {
-			println!("{:?}", k);
-		}
-	}
-
 	if conf.print {
+		if conf.parent {
+			println!("");
+			let keyframes = get_keyframes_from_parents(&parents);
+			for k in keyframes {
+				println!("{:?}", k);
+			}
+		}
+
 		let max_score = parents.iter().map(|s| s.score).max().unwrap();
 
 		println!("");
@@ -338,16 +348,6 @@ pub fn beam_search_network(starting_state: &State, weight: &WeightT, conf: &Sear
 	if depth <= beam_depth || beam_depth == 0 {
 		return -1.0
 	} else {
-		let mut best_heuristic = -1.0;
-		for p in parents {
-			if p.depth != depth {
-				continue
-			} else if p.heuristic > best_heuristic {
-				// Annoying that this isn't a simple one-liner.
-				best_heuristic = p.heuristic
-			}
-		}
-
 		return best_heuristic
 	}
 }

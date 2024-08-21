@@ -229,6 +229,10 @@ impl SearchConf {
 		return SearchConf{beam_width: MASTER_BEAM_WIDTH, beam_depth: usize::MAX, generation: 0, quiescent: true, parent: true, save: false, print: true};
 	}
 
+	pub fn single() -> SearchConf {
+		return SearchConf{beam_width: 1, beam_depth: 1, generation: 0, quiescent: false, parent: false, save: false, print: false};
+	}
+
 	pub fn run_name(&self) -> String {
 		return format!("aeon-{}-gen-{}", AEON, self.generation);
 	}

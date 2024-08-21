@@ -6,7 +6,7 @@ use crate::types::{ScoreT, State, RowT, WaveT, WeightT, WellT, SearchConf, State
 
 use std::cmp::{max, min};
 
-use fnv::{FnvHashSet,FnvHashMap};
+use fnv::FnvHashMap;
 
 // The 'height' of a waveform is the height of the row *below* the bottommost row of the waveform.
 
@@ -238,112 +238,38 @@ pub fn single_move(state: &State) -> Vec<State> {
 	return to_return
 }
 
-// Gets heuristic for individual well.
-// Only to be used when batching is not appropriate.
-
-pub fn network_heuristic_individual(state: &State, weight: &WeightT, conf: &SearchConf) -> f64 {
-	let conv_list = decompose_well(&state.well);
-	let mut heuristic = forward_pass(conv_list, weight);
-	let quiescent = conf.quiescent;
+fn quiescent_heuristic(heuristics: &mut Vec<(State, f64)>, weight: &WeightT) -> () {
+	let tmp_conf = SearchConf::single();
 	
-	if !quiescent {
-		return heuristic
-	}
-
-	let mut wells_to_evaluate = FnvHashSet::default();
-	wells_to_evaluate.insert((state.clone(), 0));
-
-	// TODO: Incorporate final well state cloning into main branch.
-
-	while wells_to_evaluate.len() > 0 {
-		let mut queued_wells = FnvHashSet::default();
-		for wev in wells_to_evaluate.iter() {
-			'piece: for p in 0..PIECE_COUNT {
-				let mut tmp_queue = vec![];
-
-				let waves = resting_waveforms(p, &wev.0.well);
-				for wave in waves {
-					let slice = score_slice(wave.0, wave.1, p, &wev.0.well);
-					let mut new_w = (0, wave.1);
-					for s in slice {
-						if s > 0 {
-							new_w.0 |= wave.0 & s;
-						}
-					}
-					if new_w.0 > 0 {
-						let new_wells = waveform_to_wells(new_w.0, new_w.1, p, &wev.0);
-						for w in new_wells {
-							if w.score - state.score != wev.1 + 1 {
-								continue 'piece // If the piece can be used to clear more than 1 line, skip the entire piece.
-							} else {
-								tmp_queue.push(w);
-							}
-						}
-					}
-				}
-
-				for well in tmp_queue {
-					if !queued_wells.contains(&(well.clone(), wev.1 + 1)) {
-						queued_wells.insert((well.clone(), wev.1 + 1));
-
-						let mut tmp_conf = conf.clone();
-						tmp_conf.quiescent = false;
-
-						let h = network_heuristic_individual(&well, weight, &tmp_conf);
-						heuristic = h.max(heuristic);
-					}
-				};
-
-				break 'piece
-			}
-		};
-		wells_to_evaluate.clear();
-		wells_to_evaluate = queued_wells;
-	}
-	return heuristic
-}
-
-// Used for batches; gets the children and their heuristics.
-// This is where loop prevention logic will be.
-
-pub fn network_heuristic(state: &State, weight: &WeightT, conf: &SearchConf) -> Vec<(State, f64)> {
-	let legal = single_move(state); // This will be replaced with full piece priority lookback later.
-	let quiescent = conf.quiescent;
-
-	let mut heuristics: Vec<(State, f64)> = legal.iter().map(|s| (s.clone(), -1.0)).collect();
-	for i in 0..legal.len() {
-		let conv_list = decompose_well(&heuristics[i].0.well);
-		heuristics[i].1 = forward_pass(conv_list, weight);
-	}
-
-	if !quiescent {
-		return heuristics
-	} 
-
+	// Has key (well, depth) and value Vec<ancestor_index>.
 	let mut wells_to_evaluate = FnvHashMap::default();
-	for i in 0..legal.len() {
-		if !wells_to_evaluate.contains_key(&(legal[i].clone(), 0)) {
-			wells_to_evaluate.insert((legal[i].clone(), 0), vec![i]);
+
+	for i in 0..heuristics.len() {
+		if !wells_to_evaluate.contains_key(&(heuristics[i].0.clone(), 0)) {
+			wells_to_evaluate.insert((heuristics[i].0.clone(), 0), vec![i]);
 		} else {
-			let mut affected_wells = wells_to_evaluate.get(&(legal[i].clone(), 0)).unwrap().clone();
-			affected_wells.push(i);
-			wells_to_evaluate.insert((legal[i].clone(), 0), affected_wells);
+			// Multiple wells can lead to the same end state.
+			// We want to update all ancestors of that end state without duplication.
+
+			let mut common_ancestors = wells_to_evaluate.get(&(heuristics[i].0.clone(), 0)).unwrap().clone();
+			common_ancestors.push(i);
+			wells_to_evaluate.insert((heuristics[i].0.clone(), 0), common_ancestors);
 		}
 	}
 
 	let mut heuristic_map = FnvHashMap::default();
-	for i in 0..legal.len() {
+	for i in 0..heuristics.len() {
 		heuristic_map.insert(heuristics[i].0.clone(), heuristics[i].1.clone());
 	}
 
 	while wells_to_evaluate.len() > 0 {
 		let mut queued_wells = FnvHashMap::default();
 		for wev in wells_to_evaluate.iter() {
-			let prev_score = legal[wev.1[0]].score;
+			let prev_score = heuristics[wev.1[0]].0.score;
 			
 			'piece: for p in 0..PIECE_COUNT {
 				let mut tmp_queue = vec![];
-
+	
 				let waves = resting_waveforms(p, &wev.0.0.well);
 				for wave in waves {
 					let slice = score_slice(wave.0, wave.1, p, &wev.0.0.well);
@@ -364,30 +290,31 @@ pub fn network_heuristic(state: &State, weight: &WeightT, conf: &SearchConf) -> 
 						}
 					}
 				}
-
+	
 				for well in tmp_queue {
 					if !queued_wells.contains_key(&(well.clone(), wev.0.1 + 1)) {
 						queued_wells.insert((well.clone(), wev.0.1 + 1), wev.1.clone());
-
-						let mut tmp_conf = conf.clone();
-						tmp_conf.quiescent = false;
-
+	
 						let h = network_heuristic_individual(&well, weight, &tmp_conf);
 						for &id in wev.1 {
 							heuristics[id].1 = heuristics[id].1.max(h);
 						}
 						heuristic_map.insert(well, h);
 					} else {
-						let mut affected_wells = queued_wells.get(&(well.clone(), wev.0.1 + 1)).unwrap().clone();
+						let mut common_ancestors = queued_wells.get(&(well.clone(), wev.0.1 + 1)).unwrap().clone();
 						let mut to_update = wev.1.clone();
-						affected_wells.append(&mut to_update);
-						queued_wells.insert((well.clone(), wev.0.1 + 1), affected_wells);
+						common_ancestors.append(&mut to_update);
+						queued_wells.insert((well.clone(), wev.0.1 + 1), common_ancestors);
 						let h = *heuristic_map.get(&well).unwrap();
 						for &id in wev.1 {
 							heuristics[id].1 = heuristics[id].1.max(h);
 						}
 					}
 				};
+	
+				// We only care about the first available piece in the ordering.
+				// Once we have one that doesn't clear two lines, we're done.
+				// For the standard HATETRIS algorithm, this means either S or Z.
 
 				break 'piece
 			}
@@ -395,12 +322,50 @@ pub fn network_heuristic(state: &State, weight: &WeightT, conf: &SearchConf) -> 
 		wells_to_evaluate.clear();
 		wells_to_evaluate = queued_wells;
 	}
+	
+	// We don't return anything; quiescent_heuristic() modifies `heuristics` in-place.
+}
 
-	return heuristics
+// Gets heuristic for individual well.
+// Only to be used when batching is not appropriate.
+
+pub fn network_heuristic_individual(state: &State, weight: &WeightT, conf: &SearchConf) -> f64 {
+	let conv_list = decompose_well(&state.well);
+	let heuristic = forward_pass(conv_list, weight);
+	let quiescent = conf.quiescent;
+	
+	if !quiescent {
+		return heuristic
+	}
+
+	let mut heuristics = vec![(state.clone(), heuristic)];
+
+	quiescent_heuristic(&mut heuristics, weight);
+
+	return heuristics[0].1
+}
+
+// Used for batches; gets the children and their heuristics.
+
+pub fn network_heuristic(state: &State, weight: &WeightT, conf: &SearchConf) -> Vec<(State, f64)> {
+	let legal = single_move(state);
+	let quiescent = conf.quiescent;
+
+	let mut heuristics: Vec<(State, f64)> = legal.iter().map(|s| (s.clone(), -1.0)).collect();
+	for i in 0..legal.len() {
+		let conv_list = decompose_well(&heuristics[i].0.well);
+		heuristics[i].1 = forward_pass(conv_list, weight);
+	}
+
+	if quiescent {
+		quiescent_heuristic(&mut heuristics, weight);
+	}
+
+	return heuristics;
 }
 
 
-pub fn network_heuristic_loop(state: &State, p: usize, parents: &Vec<(usize, StateP)>, weight: &WeightT, conf: &SearchConf) -> (Vec<(State, f64)>, Vec<Vec<State>>) {
+pub fn network_heuristic_loop(state: &State, parents: &Vec<(usize, StateP)>, weight: &WeightT, conf: &SearchConf) -> (Vec<(State, f64)>, Vec<Vec<State>>) {
 	let all_waves: Vec<Vec<(WaveT, usize)>> = (0..PIECE_COUNT)
 		.map(|p| resting_waveforms(p, &state.well))
 		.collect();
@@ -432,81 +397,7 @@ pub fn network_heuristic_loop(state: &State, p: usize, parents: &Vec<(usize, Sta
 			heuristics[i].1 = forward_pass(conv_list, weight);
 		}
 
-		let mut wells_to_evaluate = FnvHashMap::default();
-		for i in 0..legal.len() {
-			if !wells_to_evaluate.contains_key(&(legal[i].clone(), 0)) {
-				wells_to_evaluate.insert((legal[i].clone(), 0), vec![i]);
-			} else {
-				let mut affected_wells = wells_to_evaluate.get(&(legal[i].clone(), 0)).unwrap().clone();
-				affected_wells.push(i);
-				wells_to_evaluate.insert((legal[i].clone(), 0), affected_wells);
-			}
-		}
-
-		let mut heuristic_map = FnvHashMap::default();
-		for i in 0..legal.len() {
-			heuristic_map.insert(heuristics[i].0.clone(), heuristics[i].1.clone());
-		}
-
-		while wells_to_evaluate.len() > 0 {
-			let mut queued_wells = FnvHashMap::default();
-			for wev in wells_to_evaluate.iter() {
-				let prev_score = legal[wev.1[0]].score;
-				
-				'piece: for p in 0..PIECE_COUNT {
-					let mut tmp_queue = vec![];
-
-					let waves = resting_waveforms(p, &wev.0.0.well);
-					for wave in waves {
-						let slice = score_slice(wave.0, wave.1, p, &wev.0.0.well);
-						let mut new_w = (0, wave.1);
-						for s in slice {
-							if s > 0 {
-								new_w.0 |= wave.0 & s;
-							}
-						}
-						if new_w.0 > 0 {
-							let new_wells = waveform_to_wells(new_w.0, new_w.1, p, &wev.0.0);
-							for w in new_wells {
-								if w.score - prev_score != wev.0.1 + 1 {
-									continue 'piece // If the piece can be used to clear more than 1 line, skip the entire piece.
-								} else {
-									tmp_queue.push(w);
-								}
-							}
-						}
-					}
-
-					for well in tmp_queue {
-						if !queued_wells.contains_key(&(well.clone(), wev.0.1 + 1)) {
-							queued_wells.insert((well.clone(), wev.0.1 + 1), wev.1.clone());
-
-							let mut tmp_conf = conf.clone();
-							tmp_conf.quiescent = false;
-
-							let h = network_heuristic_individual(&well, weight, &tmp_conf);
-							for &id in wev.1 {
-								heuristics[id].1 = heuristics[id].1.max(h);
-							}
-							heuristic_map.insert(well, h);
-						} else {
-							let mut affected_wells = queued_wells.get(&(well.clone(), wev.0.1 + 1)).unwrap().clone();
-							let mut to_update = wev.1.clone();
-							affected_wells.append(&mut to_update);
-							queued_wells.insert((well.clone(), wev.0.1 + 1), affected_wells);
-							let h = *heuristic_map.get(&well).unwrap();
-							for &id in wev.1 {
-								heuristics[id].1 = heuristics[id].1.max(h);
-							}
-						}
-					};
-
-					break 'piece
-				}
-			};
-			wells_to_evaluate.clear();
-			wells_to_evaluate = queued_wells;
-		}
+		quiescent_heuristic(&mut heuristics, weight);
 
 		// LOOP DETECTION
 
@@ -516,7 +407,7 @@ pub fn network_heuristic_loop(state: &State, p: usize, parents: &Vec<(usize, Sta
 		};
 
 		let mut has_loop = false;
-		let mut j = p;
+		let mut j = legal_p;
 		let mut d = parents[j].1.depth;
 		'outer: while d > 0 {
 			d = parents[j].1.depth;
