@@ -265,6 +265,10 @@ impl SearchConf {
 		return format!("{}/parent_{}.bin", self.replay_path(), depth);
 	}
 
+	pub fn loop_path(&self, depth: usize) -> String {
+		return format!("{}/loop_{}.bin", self.replay_path(), depth);
+	}
+
 	pub fn epoch_path(&self, epoch: isize) -> String {
 		return format!("{}/epoch_{}.bin", self.training_path(), epoch);
 	}

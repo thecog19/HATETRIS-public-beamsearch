@@ -1,3 +1,5 @@
 /target/
 /Training/
 /Output Logs/
+flamegraph.svg
+perf.*

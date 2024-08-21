@@ -1,5 +1,5 @@
 use crate::constants::{EFF_HEIGHT, MAX_ROW, VERSION, MULTIPLIER};
-use crate::emulator::{single_move, network_heuristic_individual, network_heuristic};
+use crate::emulator::{network_heuristic, network_heuristic_individual, network_heuristic_loop, single_move};
 use crate::types::{SearchConf, State, StateH, WeightT, StateP};
 
 use std::collections::{BTreeSet, HashSet};
@@ -337,6 +337,127 @@ pub fn beam_search_network(starting_state: &State, weight: &WeightT, conf: &Sear
 			for k in keyframes {
 				println!("{:?}", k);
 			}
+		}
+
+		let max_score = parents.iter().map(|s| s.score).max().unwrap();
+
+		println!("");
+		println!("GENERATION {} SUMMARY: Width: {}; Score: {}; Depth: {}", conf.generation, conf.beam_width, max_score, depth);
+	}
+
+	if depth <= beam_depth || beam_depth == 0 {
+		return -1.0
+	} else {
+		return best_heuristic
+	}
+}
+
+pub fn beam_search_network_loop(starting_state: &State, weight: &WeightT, conf: &SearchConf) -> f64  {
+	// We don't check conf.parent here, since loop detection can't work without parents.
+
+	let beam_width = conf.beam_width;
+	let beam_depth = conf.beam_depth;
+	if conf.save {
+		fs::create_dir_all(conf.replay_path()).expect("Could not create replay folder.");
+	}
+
+	let mut wells = Vec::with_capacity(beam_width + 1);
+	let mut depth: usize = 0;
+	let mut parents = Vec::with_capacity(3 * beam_width);
+
+	let starting_parent = StateP {
+		well: starting_state.well.clone(),
+		score: starting_state.score,
+		heuristic: network_heuristic_individual(starting_state, weight, conf),
+		min_prev_heuristic: f64::MAX,
+		depth: 0,
+		parent_index: usize::MAX, // This would cause a panic were it ever accessed.
+	};
+
+	init_from_save(conf, &mut wells, &mut parents, starting_state, starting_parent, &mut depth);
+
+	let mut best_heuristic = -1.0;
+	
+	let start = Instant::now();
+
+	while wells.len() > 0 && depth < beam_depth {
+		depth += 1;
+		let mut children_count: usize = 0;
+		
+		let mut new_wells: BTreeSet<StateH> = BTreeSet::new();
+		let mut new_parents: Vec<StateP> = parents.clone();
+		let mut loops = vec![];
+
+		for (p, parent) in parents.iter().enumerate() {
+			if parent.depth != depth - 1{
+				continue
+			}
+
+			let well = &parent.convert_state();
+			let (full_legal, mut new_loops) = network_heuristic_loop(well, p, &parents, &weight, &conf);
+			loops.append(&mut new_loops);
+
+			children_count += full_legal.len();
+				
+			for (node, h) in full_legal {
+				let did_insert = insert_state(&node, h, &mut new_wells, &conf);
+				if did_insert {
+					let new_parent = StateP { 
+						well: node.well.clone(), 
+						score: node.score,
+						heuristic: h,
+						min_prev_heuristic: h.min(parent.min_prev_heuristic),
+						depth: parent.depth + 1,
+						parent_index: p
+					};
+
+					new_parents.push(new_parent);
+				}
+			};
+		}
+
+		if new_wells.len() == 0 {
+			break;
+		}
+
+		insert_new_parents(depth, &new_wells, new_parents, &mut parents);
+
+		wells.clear();
+		best_heuristic = -1.0;
+
+		for w in new_wells {
+			if (w.heuristic as f64) / 1_000_000.0 > best_heuristic {
+				best_heuristic = (w.heuristic as f64) / 1_000_000.0;
+			}
+			wells.push(State::convert(w));
+		}
+
+		if conf.save {
+			let file_name = conf.move_path(depth);
+			save_file(&file_name, VERSION, &wells).unwrap();
+
+			let parent_file_name = conf.parent_path(depth);
+			save_file(&parent_file_name, VERSION, &parents).unwrap();
+
+			if loops.len() != 0 {
+				let loop_file_name = conf.loop_path(depth);
+				save_file(&loop_file_name, VERSION, &loops).unwrap();
+			}
+		}
+
+		if conf.print {
+			print_progress(conf, &wells, depth, children_count, &start, weight);
+			if loops.len() != 0 {
+				println!("Loops: {}", loops.len());
+			}
+		}
+	}
+
+	if conf.print {
+		println!("");
+		let keyframes = get_keyframes_from_parents(&parents);
+		for k in keyframes {
+			println!("{:?}", k);
 		}
 
 		let max_score = parents.iter().map(|s| s.score).max().unwrap();

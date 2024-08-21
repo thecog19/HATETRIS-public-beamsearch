@@ -14,6 +14,7 @@ pub const WELL_LINE: usize = 4;
 
 pub const WIDTH: usize = 10;
 pub const WAVE_SIZE: usize = 4*WIDTH + 4;
+pub const MIN_LOOP: usize = 10; // Must be (LCM of WIDTH and 4) / 4, where 4 is the size of a tetromino.
 
 pub const MAX_ROW: RowT = (2 as RowT).pow(WIDTH as u32)-1;
 pub const EFF_HEIGHT: usize = WELL_HEIGHT - WELL_LINE;

@@ -1,4 +1,4 @@
-use crate::constants::{EFF_HEIGHT, MAX_ROW, ROTATE_LEFT, ROTATE_RIGHT, WAVE_SIZE, WELL_HEIGHT, WELL_LINE};
+use crate::constants::{EFF_HEIGHT, MAX_ROW, MIN_LOOP, ROTATE_LEFT, ROTATE_RIGHT, WAVE_SIZE, WELL_HEIGHT, WELL_LINE};
 use crate::neural::{decompose_well, forward_pass};
 use crate::pieces::{PIECE_COUNT, PIECE_LIST};
 use crate::masks::{EMPTY_MASKS, ROW_MASKS, HEIGHT_MASKS, SCORE_MASKS};
@@ -365,7 +365,9 @@ pub fn network_heuristic(state: &State, weight: &WeightT, conf: &SearchConf) -> 
 }
 
 
-pub fn network_heuristic_loop(state: &State, parents: &Vec<(usize, StateP)>, weight: &WeightT, conf: &SearchConf) -> (Vec<(State, f64)>, Vec<Vec<State>>) {
+pub fn network_heuristic_loop(state: &State, parent_index: usize, parents: &Vec<StateP>, weight: &WeightT, conf: &SearchConf) -> 
+	(Vec<(State, f64)>, Vec<Vec<State>>) {
+
 	let all_waves: Vec<Vec<(WaveT, usize)>> = (0..PIECE_COUNT)
 		.map(|p| resting_waveforms(p, &state.well))
 		.collect();
@@ -383,6 +385,8 @@ pub fn network_heuristic_loop(state: &State, parents: &Vec<(usize, StateP)>, wei
 		piece_order.push((piece_height, p));
 	};
 	piece_order.sort();
+
+	let mut loop_list = vec![];
 	
 	for (_, legal_p) in piece_order {
 		let mut legal = vec![];
@@ -397,7 +401,9 @@ pub fn network_heuristic_loop(state: &State, parents: &Vec<(usize, StateP)>, wei
 			heuristics[i].1 = forward_pass(conv_list, weight);
 		}
 
-		quiescent_heuristic(&mut heuristics, weight);
+		if conf.quiescent {
+			quiescent_heuristic(&mut heuristics, weight);
+		}
 
 		// LOOP DETECTION
 
@@ -406,47 +412,58 @@ pub fn network_heuristic_loop(state: &State, parents: &Vec<(usize, StateP)>, wei
 			max_heuristic = max_heuristic.max(*h);
 		};
 
-		let mut has_loop = false;
-		let mut j = legal_p;
-		let mut d = parents[j].1.depth;
+		let mut j = parent_index;
+		let mut d = parents[j].depth;
+		
+		let mut loop_ends = vec![];
+		let original_d = d;
+
 		'outer: while d > 0 {
-			d = parents[j].1.depth;
-			let min_prev = parents[j].1.min_prev_heuristic;
-			let curr = parents[j].1.heuristic;
+			d = parents[j].depth;
+			let min_prev = parents[j].min_prev_heuristic;
+			let curr = parents[j].heuristic;
 			if min_prev > max_heuristic || curr > max_heuristic {
 				break 'outer
 			} else {
-				// If this is slow, then you have to do a binary search on the sorted heuristic values.
-				// and you can't use the default rust binary search, so we probably have to roll our own
-				// or use a crate I guess.
+				// It's impossible for a loop length to not be a multiple of MIN_LOOP.
+				if (d - original_d) % MIN_LOOP == 0 {
+					let parent_state = parents[j].convert_state();
+					for (s, h) in heuristics.iter() {
+						if *h == curr && parent_state.well == s.well {
+							// Get actual repeat well, since we can't get it otherwise.
+							// This accounts for a potentially-impossible edge case:
+							//	- Well W has children A and B. 
+							//	- Child A closes loop back to Parent P_A.
+							//	- Child B closes loop back to Parent P_B.
 
-				let parent_state = parents[j].1.convert_state();
-				for (s, h) in heuristics.iter() {
-					if *h == curr && parent_state == *s {
-						has_loop = true;
-						break 'outer
+							loop_ends.push(s.clone());
+						}
 					}
 				}
 			}
 
-			j = parents[j].1.parent_index;
+			j = parents[j].parent_index;
+		}
+
+		if loop_ends.len() == 0 {
+			return (heuristics, loop_list)
 		}
 		
-		if has_loop {
-			let mut j = parents.len()-1;
-			let mut d = parents[j].1.depth;
-			let mut loop_list = Vec::with_capacity(d+1);
-			while d > 0 {
-				d = parents[j].1.depth;
-				loop_list.push(parents[j].1.convert_state());
-				j = parents[j].1.parent_index;
-			}
+		for end in loop_ends {
+			let mut tmp_loop_list = vec![end];
 
-			return (heuristics, vec![loop_list])
-		} else {
-			return (heuristics, vec![])
+			let mut j = parents.len()-1;
+			let mut d = parents[j].depth;
+			while d > 0 {
+				d = parents[j].depth;
+				tmp_loop_list.push(parents[j].convert_state());
+				j = parents[j].parent_index;
+			}
+			loop_list.push(tmp_loop_list);
 		}
 	}
+
+	// TODO: Account for the (potentially impossible) case of all pieces 
 
 	return (vec![], vec![])
 }
