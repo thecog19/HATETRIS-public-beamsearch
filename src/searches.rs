@@ -187,6 +187,13 @@ fn print_progress(conf: &SearchConf, wells: &Vec<State>, depth: usize, children_
         }
         scores[w.score as usize] += 1;
     }
+	let mut scores_tuples = vec![];
+	for s in 0..scores.len() {
+		if scores[s] != 0 {
+			scores_tuples.push((s, scores[s]));
+		}
+	}
+
     families.sort();
     families.reverse();
 
@@ -219,7 +226,7 @@ fn print_progress(conf: &SearchConf, wells: &Vec<State>, depth: usize, children_
     println!("Worst heuristic: {:?}", worst_h);
     println!("Best heuristic: {:?}", best_h);
     println!("Family distribution: {:?}", &families[0..10]);
-    println!("Score distribution: {:?}", scores);
+    println!("Score distribution: {:?}", scores_tuples);
 }
 
 pub fn beam_search_network(starting_state: &State, weight: &WeightT, conf: &SearchConf) -> f64  {
@@ -377,6 +384,7 @@ pub fn beam_search_network_loop(starting_state: &State, weight: &WeightT, conf: 
 	init_from_save(conf, &mut wells, &mut parents, starting_state, starting_parent, &mut depth);
 
 	let mut best_heuristic = -1.0;
+	let mut all_loops = vec![];
 	
 	let start = Instant::now();
 
@@ -448,9 +456,24 @@ pub fn beam_search_network_loop(starting_state: &State, weight: &WeightT, conf: 
 		if conf.print {
 			print_progress(conf, &wells, depth, children_count, &start, weight);
 			if loops.len() != 0 {
-				println!("Loops: {}", loops.len());
+			// 	// You don't know how tempted I was to make a hideous Mathematica-style one-liner here.
+			// 	// I compromised and wrote a slightly less hideous Mathematica-style three-liner instead.
+
+			// 	let mut loop_lengths = vec![0; loops.len()];
+			// 	for l in 0..loops.len() {
+			// 		loop_lengths[l] = 
+			// 			loops[l]
+			// 				.iter()
+			// 				.rposition(|x| x.well == loops[l][0].well)
+			// 				.unwrap();
+			// 	}
+			// 	println!("Loop Lengths: {:?}", loop_lengths);
+			println!("Loops: {:?}", loops.len());
 			}
 		}
+
+		// Append loops to master loop list.
+		all_loops.append(&mut loops);
 	}
 
 	if conf.print {
@@ -458,6 +481,16 @@ pub fn beam_search_network_loop(starting_state: &State, weight: &WeightT, conf: 
 		let keyframes = get_keyframes_from_parents(&parents);
 		for k in keyframes {
 			println!("{:?}", k);
+		}
+
+		println!("");
+		println!("{} loops found.", all_loops.len());
+		for l in 0..all_loops.len() {
+			println!("");
+			println!("Loop {}", l + 1);
+			for w in &all_loops[l] {
+				println!("\t{:?}", w);
+			}
 		}
 
 		let max_score = parents.iter().map(|s| s.score).max().unwrap();

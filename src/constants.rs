@@ -14,7 +14,7 @@ pub const WELL_LINE: usize = 4;
 
 pub const WIDTH: usize = 10;
 pub const WAVE_SIZE: usize = 4*WIDTH + 4;
-pub const MIN_LOOP: usize = 10; // Must be (LCM of WIDTH and 4) / 4, where 4 is the size of a tetromino.
+pub const MIN_LOOP: usize = 5; // Must be (LCM of WIDTH and 4) / 4, where 4 is the size of a tetromino.
 
 pub const MAX_ROW: RowT = (2 as RowT).pow(WIDTH as u32)-1;
 pub const EFF_HEIGHT: usize = WELL_HEIGHT - WELL_LINE;
@@ -64,7 +64,7 @@ pub const MASTER_BEAM_WIDTH: usize = 1_000_000;
 pub const TRAINING_BEAM_WIDTH: usize = 512;
 pub const TRAINING_BEAM_DEPTH: usize = 10;
 
-pub const AEON: usize = 2;
+pub const AEON: usize = 0;
 
 // FILE NAMING AND VERSIONING
 

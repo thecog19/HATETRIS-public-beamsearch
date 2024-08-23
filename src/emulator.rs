@@ -416,44 +416,56 @@ pub fn network_heuristic_loop(state: &State, parent_index: usize, parents: &Vec<
 		let mut d = parents[j].depth;
 		
 		let mut loop_ends = vec![];
-		let original_d = d;
+		let original_d = d + 1; // The current well is at a depth one greater than its parent.
 
 		'outer: while d > 0 {
 			d = parents[j].depth;
+			
 			let min_prev = parents[j].min_prev_heuristic;
 			let curr = parents[j].heuristic;
-			if min_prev > max_heuristic || curr > max_heuristic {
+			let parent_state = parents[j].convert_state();
+
+			j = parents[j].parent_index;
+
+			if min_prev > max_heuristic {
 				break 'outer
+			} else if curr > max_heuristic {
+				continue 'outer
 			} else {
 				// It's impossible for a loop length to not be a multiple of MIN_LOOP.
-				if (d - original_d) % MIN_LOOP == 0 {
-					let parent_state = parents[j].convert_state();
-					for (s, h) in heuristics.iter() {
-						if *h == curr && parent_state.well == s.well {
+				if (original_d - d) % MIN_LOOP == 0 {
+					for (s, _h) in heuristics.iter() {
+						if parent_state.well == s.well {
 							// Get actual repeat well, since we can't get it otherwise.
-							// This accounts for a potentially-impossible edge case:
+
+							loop_ends.push(s.clone());
+
+							continue 'outer
+							// This accounts for an edge case:
 							//	- Well W has children A and B. 
 							//	- Child A closes loop back to Parent P_A.
 							//	- Child B closes loop back to Parent P_B.
-
-							loop_ends.push(s.clone());
+							// Don't know why dedup() doesn't work on loop_ends, though.
 						}
 					}
 				}
 			}
-
-			j = parents[j].parent_index;
 		}
 
 		if loop_ends.len() == 0 {
 			return (heuristics, loop_list)
+		} else {
+			loop_ends.dedup_by_key(|s| s.well);
 		}
 		
 		for end in loop_ends {
-			let mut tmp_loop_list = vec![end];
-
-			let mut j = parents.len()-1;
+			let mut j = parent_index;
 			let mut d = parents[j].depth;
+
+			let mut tmp_loop_list = Vec::with_capacity(d+2);
+			tmp_loop_list.push(end);
+			tmp_loop_list.push(state.clone());
+
 			while d > 0 {
 				d = parents[j].depth;
 				tmp_loop_list.push(parents[j].convert_state());
@@ -463,7 +475,7 @@ pub fn network_heuristic_loop(state: &State, parent_index: usize, parents: &Vec<
 		}
 	}
 
-	// TODO: Account for the (potentially impossible) case of all pieces 
+	// TODO: Account for the (potentially impossible) case of all pieces allowing a repeat well.
 
 	return (vec![], vec![])
 }
