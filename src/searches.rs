@@ -500,7 +500,6 @@ pub fn beam_search_network_loop(starting_state: &State, weight: &WeightT, conf: 
 pub fn beam_search_network_full(starting_state: &State, weight: &WeightT, conf: &SearchConf) -> f64  {
 	// This search has everything:
 	//	- Loop detection
-	//	- Global quiescent heuristic lookup tables
 	//	- Multithreading without weight cloning.
 
 	let beam_width = conf.beam_width;
