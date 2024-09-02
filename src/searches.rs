@@ -1,8 +1,8 @@
 use crate::constants::{EFF_HEIGHT, MAX_ROW, VERSION, MULTIPLIER};
-use crate::emulator::{network_heuristic, network_heuristic_full, network_heuristic_individual, network_heuristic_loop, single_move};
+use crate::emulator::{network_heuristic, network_heuristic_individual, network_heuristic_loop, single_move};
 use crate::types::{SearchConf, State, StateH, WeightT, StateP};
 
-use std::collections::{BTreeSet, HashSet, VecDeque};
+use std::collections::{BTreeSet, HashSet};
 use std::fs;
 use std::path::Path;
 use std::sync::mpsc::channel;
@@ -526,7 +526,6 @@ pub fn beam_search_network_full(starting_state: &State, weight: &WeightT, conf: 
 
 	let mut best_heuristic = -1.0;
 	let mut all_loops = vec![];
-	let mut all_quiescents = VecDeque::new();
 	
 	let start = Instant::now();
 
@@ -542,7 +541,8 @@ pub fn beam_search_network_full(starting_state: &State, weight: &WeightT, conf: 
 		//	- Score: 64, Depth: 192
 		//	- Baseline: 947 seconds.
 		//	- Global Caching: 939 seconds (margin of error?).
-		//	- Global Caching + Parallelization: 441 seconds, for 8 threads / 4 cores.
+		//	- Parallelization: 348 seconds, for 8 threads / 4 cores.
+		//	- Global Caching + Parallelization: 418 seconds, for 8 threads / 4 cores.
 		// Conclusion: These are really disappointing optimizations.
 
 		let (sender, receiver) = channel();
@@ -550,12 +550,12 @@ pub fn beam_search_network_full(starting_state: &State, weight: &WeightT, conf: 
 		parents.par_iter().enumerate().for_each_with(sender, |s, (p, parent)| {
 			if parent.depth == depth - 1 {
 				let well = &parent.convert_state();
-				let (full_legal, new_loops, new_quiescent) = network_heuristic_full(well, p, &parents, &all_quiescents, &weight);
-				let _ = s.send((p, parent, full_legal, new_loops, new_quiescent));
+				let (full_legal, new_loops) = network_heuristic_loop(well, p, &parents, &weight, &conf);
+				let _ = s.send((p, parent, full_legal, new_loops));
 			}
 		});
 
-		for (p, parent, full_legal, mut new_loops, new_quiescent) in receiver {
+		for (p, parent, full_legal, mut new_loops) in receiver {
 			children_count += full_legal.len();
 
 			for (node, h) in full_legal {
@@ -575,16 +575,6 @@ pub fn beam_search_network_full(starting_state: &State, weight: &WeightT, conf: 
 			};
 
 			loops.append(&mut new_loops);
-
-			for ((s, h), d) in new_quiescent {
-				while d >= all_quiescents.len() {
-					let new_hash: FnvHashMap<State, f64> = FnvHashMap::with_hasher(Default::default());
-					all_quiescents.push_back(new_hash);
-				}
-				if d > 0 {
-					all_quiescents[d].insert(s,h);
-				}
-			}
 		}
 
 		if new_wells.len() == 0 {
@@ -592,7 +582,7 @@ pub fn beam_search_network_full(starting_state: &State, weight: &WeightT, conf: 
 		}
 
 		insert_new_parents(depth, &new_wells, new_parents, &mut parents);
-		all_quiescents.pop_front();
+		// all_quiescents.pop_front();
 
 		wells.clear();
 		best_heuristic = -1.0;
@@ -621,9 +611,6 @@ pub fn beam_search_network_full(starting_state: &State, weight: &WeightT, conf: 
 			print_progress(conf, &wells, depth, children_count, &start, weight);
 			if loops.len() != 0 {
 				println!("Loops: {:?}", loops.len());
-			}
-			if all_quiescents.len() != 0 {
-				println!("Unique quiescents stored: {:?}", all_quiescents.iter().map(|a| a.len()).collect::<Vec<usize>>());
 			}
 		}
 
