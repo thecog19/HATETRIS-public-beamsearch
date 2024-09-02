@@ -5,6 +5,7 @@ use crate::masks::{EMPTY_MASKS, ROW_MASKS, HEIGHT_MASKS, SCORE_MASKS};
 use crate::types::{ScoreT, State, RowT, WaveT, WeightT, WellT, SearchConf, StateP};
 
 use std::cmp::{max, min};
+use std::collections::VecDeque;
 
 use fnv::FnvHashMap;
 
@@ -48,6 +49,9 @@ pub fn waveform_to_wells(wave: WaveT, height: usize, p: usize, state: &State) ->
 		};
 		w >>= 1;
 	}
+
+	wells.sort();
+	wells.dedup();
 
 	return wells
 
@@ -243,10 +247,12 @@ fn quiescent_heuristic(heuristics: &mut Vec<(State, f64)>, weight: &WeightT) -> 
 	
 	// Has key (well, depth) and value Vec<ancestor_index>.
 	let mut wells_to_evaluate = FnvHashMap::default();
+	let mut total_wells = vec![0];
 
 	for i in 0..heuristics.len() {
 		if !wells_to_evaluate.contains_key(&(heuristics[i].0.clone(), 0)) {
 			wells_to_evaluate.insert((heuristics[i].0.clone(), 0), vec![i]);
+			total_wells[0] += 1;
 		} else {
 			// Multiple wells can lead to the same end state.
 			// We want to update all ancestors of that end state without duplication.
@@ -263,8 +269,11 @@ fn quiescent_heuristic(heuristics: &mut Vec<(State, f64)>, weight: &WeightT) -> 
 	}
 
 	while wells_to_evaluate.len() > 0 {
+		total_wells.push(0);
+		let tmp_depth = total_wells.len()-1;
 		let mut queued_wells = FnvHashMap::default();
 		for wev in wells_to_evaluate.iter() {
+			total_wells[tmp_depth] += 1;
 			let prev_score = heuristics[wev.1[0]].0.score;
 			
 			'piece: for p in 0..PIECE_COUNT {
@@ -324,6 +333,111 @@ fn quiescent_heuristic(heuristics: &mut Vec<(State, f64)>, weight: &WeightT) -> 
 	}
 	
 	// We don't return anything; quiescent_heuristic() modifies `heuristics` in-place.
+}
+
+pub fn quiescent_heuristic_2(heuristics: &mut Vec<(State, f64)>, seen_states: &VecDeque<FnvHashMap<State, f64>>, weight: &WeightT) -> Vec<((State, f64), usize)> {
+	let tmp_conf = SearchConf::single();
+	let h_len = heuristics.len();
+	let mut tmp_depth = 0;
+
+	// Tuple elements are (State, heuristic, ancestors, depth, already_evaluated)
+	let mut new_states: Vec<(State, f64, Vec<usize>, usize, bool)> = vec![];
+
+	// Has key `State` and value Vec<ancestor_index>.
+	let mut states_to_evaluate = FnvHashMap::default();
+	
+	// We assume that `heuristics` has no duplicates.
+	// If it does have duplicates, none but the last duplicate will update.
+	for i in 0..heuristics.len() {
+		states_to_evaluate.insert(heuristics[i].0.clone(), vec![i]);
+		new_states.push((heuristics[i].0.clone(), heuristics[i].1, vec![i], tmp_depth, false));
+	}
+
+	while states_to_evaluate.len() > 0 {
+		let mut queued_states = FnvHashMap::default();
+		for (sev, ancestors) in &states_to_evaluate {
+			let mut new_ancestors = ancestors.clone();
+			new_ancestors.push(new_states.len());
+
+			if tmp_depth < seen_states.len() {
+				match seen_states[tmp_depth].get(&sev) {
+					Some(h) => {
+						new_states.push((sev.clone(), *h, new_ancestors.clone(), tmp_depth, true));
+						continue	
+					},
+					None => ()
+				}
+			}
+
+			new_states.push((sev.clone(), -1.0, new_ancestors.clone(), tmp_depth, false));
+			
+			'piece: for p in 0..PIECE_COUNT {
+				let mut tmp_queue = vec![];
+				let waves = resting_waveforms(p, &sev.well);
+				for (wave, height) in waves {
+					let score_wave = score_slice(wave, height, p, &sev.well).iter().fold(0, |acc, x| acc | x);
+					if score_wave > 0 {
+						let new_wells = waveform_to_wells(score_wave, height, p, &sev);
+						for w in new_wells {
+							// We only care about the first available piece in the ordering.
+							// Once we have one that doesn't clear two lines, we're done.
+							// For the standard HATETRIS algorithm, this means either S or Z.
+							if w.score != sev.score + 1 {
+								continue 'piece
+							} else {
+								tmp_queue.push(w);
+							}
+						}
+					}
+				}
+
+				for tmp_state in tmp_queue {
+					if !queued_states.contains_key(&tmp_state) {
+						queued_states.insert(tmp_state, new_ancestors.clone());
+					} else {
+						let previous_ancestors = queued_states.get_mut(&tmp_state).unwrap();
+						let mut old_ancestors = new_ancestors.clone();
+						previous_ancestors.append(&mut old_ancestors);
+						previous_ancestors.sort();
+						previous_ancestors.dedup();
+					}
+				}
+
+				break 'piece
+			}
+		}
+
+		states_to_evaluate.clear();
+		states_to_evaluate = queued_states;
+		tmp_depth += 1;
+	}
+
+	for i in (0..new_states.len()).rev() {
+		let new_h = 
+			if !new_states[i].4 {
+				network_heuristic_individual(&new_states[i].0, weight, &tmp_conf)
+			} else {
+				new_states[i].1
+			};
+
+		let ancestors = new_states[i].2.clone();
+
+		for ancestor in &ancestors {
+			if !new_states[*ancestor].4 {
+				new_states[*ancestor].1 = new_states[*ancestor].1.max(new_h);
+			}
+			if *ancestor < h_len {
+				heuristics[*ancestor].1 = heuristics[*ancestor].1.max(new_h);
+			}
+		}
+	}
+
+	let to_return = new_states
+		.iter()
+		.map(|(s, h, _, d, _)| ((s.clone(), *h), *d))
+		.collect();
+
+	return to_return
 }
 
 // Gets heuristic for individual well.
@@ -436,7 +550,7 @@ pub fn network_heuristic_loop(state: &State, parent_index: usize, parents: &Vec<
 				if (original_d - d) % MIN_LOOP == 0 {
 					for (s, _h) in heuristics.iter() {
 						if parent_state.well == s.well {
-							// Get actual repeat well, since we can't get it otherwise.
+							// Get actual repeat well, since we won't save it otherwise.
 
 							loop_ends.push(s.clone());
 
@@ -445,7 +559,6 @@ pub fn network_heuristic_loop(state: &State, parent_index: usize, parents: &Vec<
 							//	- Well W has children A and B. 
 							//	- Child A closes loop back to Parent P_A.
 							//	- Child B closes loop back to Parent P_B.
-							// Don't know why dedup() doesn't work on loop_ends, though.
 						}
 					}
 				}
@@ -454,8 +567,6 @@ pub fn network_heuristic_loop(state: &State, parent_index: usize, parents: &Vec<
 
 		if loop_ends.len() == 0 {
 			return (heuristics, loop_list)
-		} else {
-			loop_ends.dedup_by_key(|s| s.well);
 		}
 		
 		for end in loop_ends {
@@ -464,7 +575,6 @@ pub fn network_heuristic_loop(state: &State, parent_index: usize, parents: &Vec<
 
 			let mut tmp_loop_list = Vec::with_capacity(d+2);
 			tmp_loop_list.push(end);
-			tmp_loop_list.push(state.clone());
 
 			while d > 0 {
 				d = parents[j].depth;
@@ -478,4 +588,116 @@ pub fn network_heuristic_loop(state: &State, parent_index: usize, parents: &Vec<
 	// TODO: Account for the (potentially impossible) case of all pieces allowing a repeat well.
 
 	return (vec![], vec![])
+}
+
+pub fn network_heuristic_full(state: &State, parent_index: usize, parents: &Vec<StateP>, seen_states: &VecDeque<FnvHashMap<State, f64>>, weight: &WeightT) -> 
+	(Vec<(State, f64)>, Vec<Vec<State>>, Vec<((State, f64), usize)>) {
+	
+	let all_waves: Vec<Vec<(WaveT, usize)>> = (0..PIECE_COUNT)
+		.map(|p| resting_waveforms(p, &state.well))
+		.collect();
+
+	let mut piece_order = vec![];
+
+	for p in 0..PIECE_COUNT {
+		let mut piece_height = -1 * (WELL_LINE as isize);
+		for wave in &all_waves[p] {
+			let new_height = get_wave_height(wave.0, wave.1, p, &state.well);
+			if new_height > piece_height {
+				piece_height = new_height;
+			}
+		}
+		piece_order.push((piece_height, p));
+	};
+	piece_order.sort();
+
+	let mut loop_list = vec![];
+	
+	for (_, legal_p) in piece_order {
+		let mut legal = vec![];
+		for (w, h) in &all_waves[legal_p] {
+			let mut w_list = waveform_to_wells(*w, *h, legal_p, state);
+			legal.append(&mut w_list);
+		}
+		legal.sort();
+		legal.dedup();
+
+		let mut heuristics: Vec<(State, f64)> = legal.iter().map(|s| (s.clone(), -1.0)).collect();
+		for i in 0..legal.len() {
+			let conv_list = decompose_well(&heuristics[i].0.well);
+			heuristics[i].1 = forward_pass(conv_list, weight);
+		}
+
+		// Returns Vec<((State, heuristic), depth)>
+		let new_quiescent = quiescent_heuristic_2(&mut heuristics, &seen_states, weight);
+
+		// LOOP DETECTION
+
+		let mut max_heuristic: f64 = -1.0;
+		for (_s, h) in &heuristics {
+			max_heuristic = max_heuristic.max(*h);
+		};
+
+		let mut j = parent_index;
+		let mut d = parents[j].depth;
+		
+		let mut loop_ends = vec![];
+		let original_d = d + 1; // The current well is at a depth one greater than its parent.
+
+		'outer: while d > 0 {
+			d = parents[j].depth;
+			
+			let min_prev = parents[j].min_prev_heuristic;
+			let curr = parents[j].heuristic;
+			let parent_state = parents[j].convert_state();
+
+			j = parents[j].parent_index;
+
+			if min_prev > max_heuristic {
+				break 'outer
+			} else if curr > max_heuristic {
+				continue 'outer
+			} else {
+				// It's impossible for a loop length to not be a multiple of MIN_LOOP.
+				if (original_d - d) % MIN_LOOP == 0 {
+					for (s, _h) in heuristics.iter() {
+						if parent_state.well == s.well {
+							// Get actual repeat well, since we won't save it otherwise.
+
+							loop_ends.push(s.clone());
+
+							continue 'outer
+							// This accounts for an edge case:
+							//	- Well W has children A and B. 
+							//	- Child A closes loop back to Parent P_A.
+							//	- Child B closes loop back to Parent P_B.
+						}
+					}
+				}
+			}
+		}
+
+		if loop_ends.len() == 0 {
+			return (heuristics, loop_list, new_quiescent)
+		}
+		
+		for end in loop_ends {
+			let mut j = parent_index;
+			let mut d = parents[j].depth;
+
+			let mut tmp_loop_list = Vec::with_capacity(d+2);
+			tmp_loop_list.push(end);
+
+			while d > 0 {
+				d = parents[j].depth;
+				tmp_loop_list.push(parents[j].convert_state());
+				j = parents[j].parent_index;
+			}
+			loop_list.push(tmp_loop_list);
+		}
+	}
+
+	// TODO: Account for the (potentially impossible) case of all pieces allowing a repeat well.
+
+	return (vec![], vec![], vec![])
 }
