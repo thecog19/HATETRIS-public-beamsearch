@@ -1,5 +1,6 @@
 use crate::constants::{EFF_HEIGHT, MAX_ROW, VERSION, MULTIPLIER};
 use crate::emulator::{network_heuristic, network_heuristic_individual, network_heuristic_loop, single_move};
+use crate::replay::reconstruct_game;
 use crate::types::{SearchConf, State, StateH, WeightT, StateP};
 
 use std::collections::{BTreeSet, HashSet};
@@ -322,7 +323,7 @@ pub fn beam_search_network(starting_state: &State, weight: &WeightT, conf: &Sear
 			if (w.heuristic as f64) / 1_000_000.0 > best_heuristic {
 				best_heuristic = (w.heuristic as f64) / 1_000_000.0;
 			}
-			wells.push(State::convert(w));
+			wells.push(w.convert_state());
 		}
 
 		if conf.save {
@@ -344,9 +345,18 @@ pub fn beam_search_network(starting_state: &State, weight: &WeightT, conf: &Sear
 		if conf.parent {
 			println!("");
 			let keyframes = get_keyframes_from_parents(&parents);
-			for k in keyframes {
+			for k in &keyframes {
 				println!("{:?}", k);
 			}
+
+			let keyframe_states = keyframes
+				.iter()
+				.rev()
+				.map(|k| k.convert_state())
+				.collect();
+			let replay = reconstruct_game(&keyframe_states, true);
+			println!("");
+			println!("{}", replay);
 		}
 
 		let max_score = parents.iter().map(|s| s.score).max().unwrap();
@@ -440,7 +450,7 @@ pub fn beam_search_network_loop(starting_state: &State, weight: &WeightT, conf: 
 			if (w.heuristic as f64) / 1_000_000.0 > best_heuristic {
 				best_heuristic = (w.heuristic as f64) / 1_000_000.0;
 			}
-			wells.push(State::convert(w));
+			wells.push(w.convert_state());
 		}
 
 		if conf.save {
@@ -470,9 +480,18 @@ pub fn beam_search_network_loop(starting_state: &State, weight: &WeightT, conf: 
 	if conf.print {
 		println!("");
 		let keyframes = get_keyframes_from_parents(&parents);
-		for k in keyframes {
+		for k in &keyframes {
 			println!("{:?}", k);
 		}
+
+		let keyframe_states = keyframes
+			.iter()
+			.rev()
+			.map(|k| k.convert_state())
+			.collect();
+		let replay = reconstruct_game(&keyframe_states, true);
+		println!("");
+		println!("{}", replay);
 
 		println!("");
 		println!("{} loops found.", all_loops.len());
@@ -590,7 +609,7 @@ pub fn beam_search_network_full(starting_state: &State, weight: &WeightT, conf: 
 			if (w.heuristic as f64) / 1_000_000.0 > best_heuristic {
 				best_heuristic = (w.heuristic as f64) / 1_000_000.0;
 			}
-			wells.push(State::convert(w));
+			wells.push(w.convert_state());
 		}
 
 		if conf.save {
@@ -620,24 +639,36 @@ pub fn beam_search_network_full(starting_state: &State, weight: &WeightT, conf: 
 	if conf.print {
 		println!("");
 		let keyframes = get_keyframes_from_parents(&parents);
-		for k in keyframes {
+		for k in &keyframes {
 			println!("{:?}", k);
 		}
 
+		let keyframe_states = keyframes
+			.iter()
+			.rev()
+			.map(|k| k.convert_state())
+			.collect();
+		let replay = reconstruct_game(&keyframe_states, true);
 		println!("");
-		println!("{} loops found.", all_loops.len());
-		for l in 0..all_loops.len() {
-			println!("");
-			println!("Loop {}", l + 1);
-			for w in &all_loops[l] {
-				println!("\t{:?}", w);
-			}
-		}
+		println!("{}", replay);
+
+		// Warning: there can be a LOT of loops, and they take up a lot of log space.
+		// Uncomment this if you want to print them.
+
+		// println!("");
+		// println!("{} loops found.", all_loops.len());
+		// for l in 0..all_loops.len() {
+		// 	println!("");
+		// 	println!("Loop {}", l + 1);
+		// 	for w in &all_loops[l] {
+		// 		println!("\t{:?}", w);
+		// 	}
+		// }
 
 		let max_score = parents.iter().map(|s| s.score).max().unwrap();
 
 		println!("");
-		println!("GENERATION {} SUMMARY: Width: {}; Score: {}; Depth: {}", conf.generation, conf.beam_width, max_score, depth);
+		println!("GENERATION {} SUMMARY: Width: {}; Score: {}; Depth: {}; Loops: {}", conf.generation, conf.beam_width, max_score, depth, all_loops.len());
 	}
 
 	if depth <= beam_depth || beam_depth == 0 {

@@ -24,10 +24,6 @@ impl State {
 	pub fn new() -> State {
 		return State{well: [0; EFF_HEIGHT], score: 0}
 	}
-
-	pub fn convert(state: StateH) -> State {
-		return State{well: state.well, score: state.score}
-	}
 }
 
 #[derive(Clone, Debug, Hash, PartialEq, Eq, PartialOrd, Ord)]
@@ -40,6 +36,10 @@ pub struct StateH {
 impl StateH {
 	pub fn new() -> StateH {
 		return StateH{well: [0; EFF_HEIGHT], score: 0, heuristic: i64::MIN}
+	}
+
+	pub fn convert_state(&self) -> State {
+		return State{well: self.well, score: self.score}
 	}
 }
 

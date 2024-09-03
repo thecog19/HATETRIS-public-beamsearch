@@ -69,8 +69,8 @@ pub fn waveform_step(w_old: WaveT, p: usize, height: usize, well: &WellT) -> Wav
 	let mut w_new = w;
 	let mut w_seen = w;
 	while w_new > 0 {
-		let w_right = w << 4;
-		let w_left = w >> 4;
+		let w_right = w >> 4;
+		let w_left = w << 4;
 		let w_rotate = ((w & ROTATE_LEFT) << 3) | 
 							((w & ROTATE_RIGHT) >> 1);
 		w |= w_right;
@@ -89,7 +89,7 @@ pub fn waveform_step(w_old: WaveT, p: usize, height: usize, well: &WellT) -> Wav
 pub fn get_well_height(well: &WellT) -> usize {
 	let mut height = 0;
 	while height < EFF_HEIGHT {
-		if well[height as usize] != 0 {
+		if well[height] != 0 {
 			break
 		};
 		height += 1;
@@ -335,6 +335,8 @@ fn quiescent_heuristic(heuristics: &mut Vec<(State, f64)>, weight: &WeightT) -> 
 	// We don't return anything; quiescent_heuristic() modifies `heuristics` in-place.
 }
 
+// Global quiescent lookahead caching.
+// It turned out to actually be slower, but we'll keep it in the code just in case there's some major speedup possible.
 pub fn quiescent_heuristic_2(heuristics: &mut Vec<(State, f64)>, seen_states: &VecDeque<FnvHashMap<State, f64>>, weight: &WeightT) -> Vec<((State, f64), usize)> {
 	let tmp_conf = SearchConf::single();
 	let h_len = heuristics.len();
