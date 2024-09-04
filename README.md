@@ -178,7 +178,7 @@ The input layer is sparse and convolutional.  The two convolutions used here are
 
 We take this network from [the work of knewjade](https://gist.github.com/knewjade/24fd3a655e5321c8ebac8b93fa497ed9#1-neural-network%E3%81%AE%E6%A7%8B%E6%88%90); the two differences between our network and his are that our network has positional convolutions and lacks a bias neuron.
 
-<img src="https://gist.github.com/knewjade/00f380b6e82f6212ecacd7bb4322701e/raw/6839b881c6a72149e51262d34623ff9b9a5d8134/image_network.png" width=500, alt="A visualization of the network, " title="A comparison the average move speed of various versions of the HATETRIS emulator."/>
+<img src="https://hallofdreams.org/assets/img/HATETRIS/NNUE_Visualization.png" width=500, alt="A visualization of the network architecture." title="A visualization of the network architecture."/>
 
 *Source: [knewjade](https://gist.github.com/knewjade/24fd3a655e5321c8ebac8b93fa497ed9#1-neural-network%E3%81%AE%E6%A7%8B%E6%88%90)*
 
