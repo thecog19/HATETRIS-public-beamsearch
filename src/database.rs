@@ -52,7 +52,7 @@ pub fn extract_data_points(count: usize, conf: &SearchConf) -> Vec<State> {
 			// We're choosing one at a time to allow repeats.
 			to_return.push(wells.choose(&mut rng).unwrap().clone());
 		}
-		println!("{} states extracted from timestep {} in {} seconds.", chosen[d], d, start.elapsed().as_secs());
+		println!("{} states extracted from timestep {} by {} seconds.", chosen[d], d, start.elapsed().as_secs());
 	}
 	to_return.shuffle(&mut rng);
 

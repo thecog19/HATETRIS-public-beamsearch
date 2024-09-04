@@ -53,8 +53,6 @@ pub const EPS: f64 = 0.00000001;
 pub const RHO: f64 = 0.999;
 pub const RHO_F: f64 = 0.9;
 
-pub const CHUNK: usize = 4;
-
 // TRAINING LOOP PARAMETERS
 
 pub const MINIBATCH: usize = 4096;
@@ -68,12 +66,7 @@ pub const AEON: usize = 0;
 
 // FILE NAMING AND VERSIONING
 
-pub const BEAM_WIDTH: usize = 10_000;
-
 pub const CHECKPOINTS: &str = "Training";
-
-pub const RUN_TYPE: &str = "recursive_heuristic_2/"; // Only for non-neural-network runs.
-pub const SAVE_RUN: bool = false;
 
 pub const VERSION: u32 = (WELL_HEIGHT << 16 + WIDTH << 8 + 0) as u32; // Implicitly limits wells to 65536 x 256.
 pub const NET_VERSION: u32 = 1;
