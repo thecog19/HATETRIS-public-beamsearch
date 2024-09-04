@@ -27,7 +27,7 @@ The game can be played [here](https://qntm.org/files/hatetris/hatetris.html).
 
 ### What is This Repository?
 
-This repository contains Rust code for a highly-optimized HATETRIS emulator and a [**beam search**](https://en.wikipedia.org/wiki/Beam_search) routine using a neural network as the pruning heuristic.  This repository was used to obtain the current world record of [302 points](https://qntm.org/hatetris#komment6404c2c374fee).
+This repository contains Rust code for a highly-optimized HATETRIS emulator and a [**beam search**](https://en.wikipedia.org/wiki/Beam_search) routine using a neural network as the pruning heuristic.  This repository was used to obtain the current world record of [366 points](https://qntm.org/hatetris#komment66d89ea487f7b).
 
 A detailed explanation of the history of HATETRIS records, and of the development of this repository and the techniques in it, can be found on our blog:
 
@@ -164,6 +164,7 @@ Our results from training with nearly-default parameters showed rapid improvemen
 |          3 |                 186 |                   69 |
 |          4 |                 204 |                   87 |
 |          5 |                 302 |                   91 |
+|          6 |                 366 |                  123 |
 
 We typically start to see loops at scores past ~300; we did not encounter any for generations 0 through 5.
 
