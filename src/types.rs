@@ -222,7 +222,7 @@ impl SearchConf {
 	}
 
 	pub fn training(generation: usize) -> SearchConf {
-		return SearchConf{beam_width: TRAINING_BEAM_WIDTH, beam_depth: TRAINING_BEAM_DEPTH, generation: generation, quiescent: false, parent: false, save: false, print: false};
+		return SearchConf{beam_width: TRAINING_BEAM_WIDTH, beam_depth: TRAINING_BEAM_DEPTH, generation: generation, quiescent: false, parent: true, save: false, print: false};
 	}
 
 	pub fn testing() -> SearchConf {

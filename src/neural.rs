@@ -1,12 +1,7 @@
-use crate::constants::{AEON, ALL_CONV, ALPHA, CONV_COUNT, CONVOLUTIONS, EFF_HEIGHT, EPS, HIDDEN, RHO, RHO_F, WIDTH, MINIBATCH, MAX_EPOCHS, THREAD_NUMBER, VERSION, NET_VERSION};
+use crate::constants::{AEON, ALL_CONV, ALPHA, CONV_COUNT, CONVOLUTIONS, EFF_HEIGHT, EPS, HIDDEN, RHO, RHO_F, WIDTH, MINIBATCH, MAX_EPOCHS, VERSION, NET_VERSION};
 use crate::database::extract_data_points;
-use crate::searches::beam_search_network;
+use crate::searches::beam_search_network_full;
 use crate::types::{State, RowT, WeightT, WellT, SearchConf};
-
-// use std::arch::x86_64::{__m256d, _mm256_add_pd};
-// use std::simd::f64x4;
-use std::thread;
-use std::thread::JoinHandle;
 
 use std::fs;
 use std::path::Path;
@@ -290,26 +285,22 @@ pub fn train_network(
 	return best_weights
 }
 
-pub fn generate_training_data(states: Vec<State>, epoch: isize, weight: WeightT, conf: SearchConf) -> JoinHandle<()> {
-	let thread = thread::spawn(move || {
-		let start = Instant::now();
-		let mut training_data = vec![];
-		let generation = conf.generation;
-		let training_conf = SearchConf::training(generation);
+pub fn generate_training_data(states: Vec<State>, epoch: isize, weight: WeightT, conf: SearchConf) -> () {
+	let start = Instant::now();
+	let mut training_data = vec![];
+	let generation = conf.generation;
+	let training_conf = SearchConf::training(generation);
 
-		for well in states {
-			let best_result = beam_search_network(&well, &weight, &training_conf) as f64;
-			let goal_heuristic = best_result;
-			
-			training_data.push((well.well.clone(), goal_heuristic));
-		}
+	for well in states {
+		let best_result = beam_search_network_full(&well, &weight, &training_conf);
+		let goal_heuristic = best_result;
 		
-		let epoch_file_name = conf.epoch_path(epoch);
-		save_file(&epoch_file_name, 0, &training_data).unwrap();
-		println!("Training data generated for epoch {} out of {} in {} seconds.", epoch, MAX_EPOCHS, start.elapsed().as_secs());
-	});
-
-	return thread
+		training_data.push((well.well.clone(), goal_heuristic));
+	}
+	
+	let epoch_file_name = conf.epoch_path(epoch);
+	save_file(&epoch_file_name, 0, &training_data).unwrap();
+	println!("Training data generated for epoch {} out of {} in {} seconds.", epoch, MAX_EPOCHS, start.elapsed().as_secs());
 }
 
 pub fn training_cycle() -> () {
@@ -374,40 +365,24 @@ pub fn training_cycle() -> () {
 
 			println!("Training path found, training data populated up to {} out of {}.",epoch, MAX_EPOCHS);
 
-			let starting_epoch = (epoch + 1) as usize;
-			let mut thread_list: Vec<JoinHandle<()>> = vec![];
-
 			let training_data: Vec<State> = load_file(&master_conf.data_path(), VERSION).unwrap();
 			println!("{} training wells loaded.", training_data.len());
 
 			while epoch < MAX_EPOCHS {
 				epoch += 1;
-				if epoch as usize >= THREAD_NUMBER && 
-					thread_list.len() > ((epoch as usize - starting_epoch) % THREAD_NUMBER) {
-					thread_list.remove((epoch as usize - starting_epoch) % THREAD_NUMBER).join().unwrap();
-				}
-
 				let mut slice = Vec::with_capacity(MINIBATCH);
 				for i in (epoch as usize)*MINIBATCH..((epoch + 1) as usize)*MINIBATCH {
 					if i >= training_data.len() {break}
 					slice.push(training_data[i].clone());
 				}
-
-				let t = generate_training_data(slice, epoch, weight.clone(), master_conf.clone());
-				
-				thread_list.insert((epoch as usize - starting_epoch) % THREAD_NUMBER, t);
-				
-			};
-			for thread in thread_list {
-				thread.join().unwrap();
+				generate_training_data(slice, epoch, weight.clone(), master_conf.clone());
 			}
 
 			println!("Backpropagating network from generation {}", generation);
 
-			let mut all_training = vec![];
+			let mut all_training: Vec<(WellT, f64)> = vec![];
 			for e in 0..MAX_EPOCHS {
 				let tmp_file_name = master_conf.epoch_path(e);
-				// let tmp_file_name = master_conf.epoch_path(0);
 				let mut tmp_training: Vec<(WellT, f64)> = load_file(&tmp_file_name, 0).unwrap();
 
 				all_training.append(&mut tmp_training);
@@ -434,7 +409,7 @@ pub fn training_cycle() -> () {
 			let conf = SearchConf::master(generation);
 			let starting_state = State::new();
 
-			beam_search_network(&starting_state, &weight, &conf);
+			beam_search_network_full(&starting_state, &weight, &conf);
 			let training = extract_data_points(MINIBATCH * (MAX_EPOCHS as usize), &conf);
 
 			// When done, create the training folder for the next loop.

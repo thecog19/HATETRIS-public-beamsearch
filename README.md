@@ -309,14 +309,14 @@ Next, the training routine infers the number of well states present in each `mov
 Training path found, training data populated up to -1 out of 256.
 ```
 
-Each epoch is then assigned `MINIBATCH` wells and processed in an independent thread.  Depending on the size of `MINIBATCH`, `TRAINING_BEAM_WIDTH`, and `TRAINING_BEAM_DEPTH`, each epoch could take 30 minutes to an hour to run.  Due to multithreading, epochs are not necessarily completed in chronological order.
+Each epoch is then assigned `MINIBATCH` wells and processed in an independent thread.  Depending on the size of `MINIBATCH`, `TRAINING_BEAM_WIDTH`, and `TRAINING_BEAM_DEPTH`, each epoch could take 30 minutes to an hour to run.
 
 ```
 ...
 Training data generated for epoch 237 out of 256 in 2903 seconds.
 Training data generated for epoch 238 out of 256 in 2930 seconds.
 Training data generated for epoch 239 out of 256 in 2927 seconds.
-Training data generated for epoch 241 out of 256 in 2870 seconds.
+Training data generated for epoch 240 out of 256 in 2870 seconds.
 ...
 ```
 
