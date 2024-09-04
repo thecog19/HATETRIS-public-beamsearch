@@ -81,7 +81,7 @@ While HATETRIS has always been deterministic, before [June of 2021](https://qntm
 3) Otherwise, choose whichever piece minmaxes the well height (i.e. the piece which, when placed to minimize well height, causes the highest well height). 
 4) Otherwise, break ties in the order S -> Z -> O -> I -> L -> J -> T. 
 
-This repository currently accounts for rules 2-4; for performance reasons, we do not currently account for the case of all pieces leading to previously seen wells.  We have not yet found any case of even two pieces out of seven leading to a repeat well and suspect that rule 1) cannot be triggered under normal HATETRIS rules, so implementing the rule is not currently a priority, but we will be glad to implement it if you use this repository and encounter a repeat well, or approve a pr that adds this functionality.
+This repository currently accounts for rules 2-4; for performance reasons, we do not currently account for the case of all pieces leading to previously seen wells.  We have not yet found any case of even two pieces out of seven leading to a repeat well and suspect that rule 1) cannot be triggered under normal HATETRIS rules, so implementing the rule is not currently a priority, but we will be glad to implement it if you use this repository and encounter a repeat well, (and we would also approve a PR that adds this functionality).
 
 ## Installation & Setup
 
@@ -199,7 +199,7 @@ HATETRIS-PUBLIC-BEAMSEARCH
     └── Aeon 0
         ├── Generation 0
         ├── Generation 1
-		├── Generation 2
+        ├── Generation 2
         ├── ...
 ```
 
