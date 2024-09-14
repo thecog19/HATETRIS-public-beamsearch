@@ -47,7 +47,7 @@ The emulator represents a standard 20x10 HATETRIS board as an array of 16 `u16` 
 
 The emulator and the game graph created by the emulator work on **moves**, and not **positions**; for instance, a "depth 2" child of the starting well on the game graph does not describe a tetromino which has been moved twice; instead, it describes a well in which two tetrominoes have been placed into a terminal position.
 
-The piece positions within a well are not directly emulated (except during replay code generation); instead, a 64-bit ['waveform'](https://hallofdreams.org/posts/hatetris-2/#cacheless-waveforms) is used to represent all 34 possible positions a piece at a given height.  Bitshifting is used to rotate the waveform, and to move it left or right:
+The piece positions within a well are not directly emulated (except during replay code generation); instead, a 64-bit ['waveform'](https://hallofdreams.org/posts/hatetris-2/#cacheless-waveforms) is used to represent all 34 possible positions a piece at a given height can be in.  Bitshifting is used to rotate the waveform, and to move it left or right:
 
 	w_old    = abcd efgh ijkl mnop qrst
 	w_left   = efgh ijkl mnop qrst 0000
@@ -130,19 +130,26 @@ fn main() {
 You can run a beam search without active training; for instance, to run a beam with a width of 1,000 based on the Generation 3 network, without saving the beam or using it for training:
 
 ```rust
-let mut conf = SearchConf::testing();
-conf.quiescent = true;
-conf.generation = 3;
-conf.beam_width = 1_000_000;
+use constants::NET_VERSION;
+use savefile::load_file;
+use searches::beam_search_network_full;
+use types::{SearchConf, State};
 
-let neural_network_path = conf.neural_network_path(); 
-let weight = load_file(&neural_network_path, NET_VERSION).unwrap();
-let starting_state = State::new();
+fn main() {
+	let mut conf = SearchConf::testing();
+	conf.quiescent = true;
+	conf.generation = 3;
+	conf.beam_width = 1_000;
 
-println!("");
-println!("Starting beam with width {}", conf.beam_width);
+	let neural_network_path = conf.neural_network_path(); 
+	let weight = load_file(&neural_network_path, NET_VERSION).unwrap();
+	let starting_state = State::new();
 
-beam_search_network_full(&starting_state, &weight, &conf);
+	println!("");
+	println!("Starting beam with width {}", conf.beam_width);
+
+	beam_search_network_full(&starting_state, &weight, &conf);
+}
 ```
 
 ### Cycle
@@ -154,7 +161,7 @@ HATETRIS training consists of a series of discrete 'generations', each one of wh
 2. Wells are taken at random from the beam search results.  Each well is used to run a small beam of width `TRAINING_BEAM_WIDTH` for at most `TRAINING_BEAM_DEPTH` steps **without** the quiescent lookahead; the best heuristic in that beam is used as the training target for that well.  If the beam does not last `TRAINING_BEAM_DEPTH` steps, the well's training target is -1.0.
 3. A new network is trained by taking the previous network and backpropagating the wells and training targets gathered in step 2.  This new network is used for the next generation of training.
 
-Our results from training with nearly-default parameters showed rapid improvement.  Random initialization (and the fact that we modified this code and its default parameters several times during training) will ensure that no two runs are identical; still, we'd expect these general trends to hold when training beams of width ~10^6:
+Our results from training with nearly-default parameters showed rapid improvement; the table below lists the scores of the networks on the master beam searches, and the scores those same networks would have achieved on the master beam searches without the quiescence lookahead.  Random initialization (and the fact that we modified this code and its default parameters several times during training) will ensure that no two runs are identical; still, we'd expect these general trends to hold when training beams of width ~10^6:
 
 | Generation | Score w/ Quiescence | Score w/o Quiescence |
 |------------|---------------------|----------------------|
@@ -166,7 +173,7 @@ Our results from training with nearly-default parameters showed rapid improvemen
 |          5 |                 302 |                   91 |
 |          6 |                 366 |                  123 |
 
-We typically start to see loops at scores past ~300; we did not encounter any for generations 0 through 5.
+A network typically becomes good enough to find loops when its million-width beam search score surpasses ~300; we did not encounter any for generations 0 through 5.
 
 ### Network
 
@@ -209,7 +216,7 @@ The folder for `Generation N` will contain:
 - A `Replay` folder, containing for each move:
 	- `move_i.bin`: The wells in the beam at depth `i`.  The beam will have a maximum width of `MASTER_BEAM_WIDTH`.
 	- `parent_i.bin`: The parent graph of all wells in the beam at depth `i`.
-	- `loops_i.bin`: .  If no loops were found during move `i`, this file will not be created.
+	- `loops_i.bin`: If no loops were found during move `i`, this file will not be created.
 - A `Training` folder, containing:
 	- `all_epochs.bin`, containing `MAX_EPOCHS * TRAINING_BEAM_WIDTH` wells taken at random from the master beam search stored in `Replay`.
 	- `epoch_i.bin`, where `i` ranges from 0 to `MAX_EPOCHS`.  Each epoch contains the starting well and the final result of `MINIBATCH` small beam searches from `MINIBATCH` different wells, each of which has maximum width `TRAINING_BEAM_WIDTH`.
@@ -289,7 +296,7 @@ StateH { well: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], score: 0, heuri
 
 Afterwards, the game's replay is output.  Each keystroke is represented by `L`, `R`, `D`, or `U` (for left, right, down, and rotate moves, respectively).  This is an extremely inefficient encoding, conveying only two bits of usable information per character, but any other encoding will not be guaranteed to split properly when wanting to e.g. separately describe the stem and repeating section of a loop.
 
-HATETRIS has used hexadecimal (4 bits per character), [Base65536](https://github.com/qntm/base65536) (16 bits per character) and currently [Base2048](https://github.com/qntm/base2048) (11 bits per character, but Twitter-compatible) to represent replays.  Currently, the easist way to convert a run from this representation to Base2048 (for an equally valid, but far more compact, replay string) is to paste the replay into the [game itself](https://qntm.org/files/hatetris/hatetris.html), allow the game to finish replaying, and copy the resulting Base2048 replay from the end screen.  We may eventually port Base2048 to Rust to avoid this step. (Or if you're looking to make a contribution to this repository, we would approve a PR...)
+HATETRIS has used hexadecimal (4 bits per character), [Base65536](https://github.com/qntm/base65536) (16 bits per character) and currently [Base2048](https://github.com/qntm/base2048) (11 bits per character, but Twitter-compatible) to represent replays.  Currently, the easist way to convert a run from this representation to Base2048 (for an equally valid, but far more compact, replay string) is to paste the replay into the [game itself](https://qntm.org/files/hatetris/hatetris.html), allow the game to finish replaying, and copy the resulting Base2048 replay from the end screen.  We may eventually port Base2048 to Rust to avoid this step. (Or, if you're looking to make a contribution to this repository, we would approve a PR...)
 
 ```RRRDDDDDDDDDDDDDDDDDDRRDDDDDDDDDDDDDDDDDLLLDDD...```
 
@@ -387,7 +394,7 @@ These functions are the ones most likely to be worth modifying or editing, if yo
 		- First known HATETRIS beam search.
 	- [hatetris](https://github.com/threepipes/hatetris) (GitHub Repository)
 		- No emulator; calls the original JavaScript functions directly.
-		- Uses a manual heuristic use [Optuna](https://optuna.org/) to optimize the heuristic's hyperparameters.
+		- Evaluates wells with a manual heuristic; uses [Optuna](https://optuna.org/) to optimize the heuristic's hyperparameters.
 		- Highest score: 18.
 - knewjade
 	- [What I did to get 66L in HATETRIS](https://gist.github.com/knewjade/586c9d82bd53f13afa8bcb7a65f8bd5a) [JAPANESE]
