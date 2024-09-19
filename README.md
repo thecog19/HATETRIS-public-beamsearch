@@ -384,7 +384,7 @@ These functions are the ones most likely to be worth modifying or editing, if yo
 - **Multithreading:**
 	- `THREAD_NUMBER`: Number of threads available.  Change based on your CPU and computational availability.  By default, this **only** affects non-[`rayon`](https://docs.rs/rayon/latest/rayon/) processes; `rayon` processes will use all available cores.  There are two ways of restricting `rayon` threads:
 		- Set the environmental variable `RAYON_NUM_THREADS` to the desired thread count.
-		- Add `rayon::ThreadPoolBuilder::new().num_threads(THREAD_NUMBER).build_global().unwrap();` to the top of `fn main()` in `main.rs`.
+		- Add `rayon::ThreadPoolBuilder::new().num_threads(constants::THREAD_NUMBER).build_global().unwrap();` to the top of `fn main()` in `main.rs`.
 	- `THREAD_BATCH`: Default batch size of threads.  Again, this **only** affects non-`rayon` threads.
 
 ## Further Background Reading
